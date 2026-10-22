@@ -1,3 +1,143 @@
-from django.test import TestCase
 
-# Create your tests here.
+from django.test import TestCase
+from rest_framework.test import APIClient
+
+from .models import (
+    ProblemaOptimizacion,
+    VariableDecision,
+    TerminoObjetivo,
+    Restriccion,
+    TerminoRestriccion,
+)
+
+
+class ApiOptimizacionTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+        self.problema = ProblemaOptimizacion.objects.create(
+            nombre="Problema de prueba API",
+            descripcion="Prueba automatizada",
+            tipo_objetivo="MAX",
+            activo=True,
+        )
+
+        self.x = VariableDecision.objects.create(
+            problema=self.problema,
+            nombre="x",
+            tipo="CONT",
+            limite_inferior=0,
+        )
+
+        self.y = VariableDecision.objects.create(
+            problema=self.problema,
+            nombre="y",
+            tipo="CONT",
+            limite_inferior=0,
+        )
+
+        TerminoObjetivo.objects.create(
+            problema=self.problema,
+            variable=self.x,
+            coeficiente=3,
+        )
+
+        TerminoObjetivo.objects.create(
+            problema=self.problema,
+            variable=self.y,
+            coeficiente=5,
+        )
+
+        capacidad = Restriccion.objects.create(
+            problema=self.problema,
+            nombre="capacidad",
+            operador="LE",
+            lado_derecho=12,
+        )
+
+        TerminoRestriccion.objects.create(
+            restriccion=capacidad,
+            variable=self.x,
+            coeficiente=2,
+        )
+
+        TerminoRestriccion.objects.create(
+            restriccion=capacidad,
+            variable=self.y,
+            coeficiente=3,
+        )
+
+        limite_x = Restriccion.objects.create(
+            problema=self.problema,
+            nombre="limite_x",
+            operador="LE",
+            lado_derecho=4,
+        )
+
+        TerminoRestriccion.objects.create(
+            restriccion=limite_x,
+            variable=self.x,
+            coeficiente=1,
+        )
+
+        limite_y = Restriccion.objects.create(
+            problema=self.problema,
+            nombre="limite_y",
+            operador="LE",
+            lado_derecho=3,
+        )
+
+        TerminoRestriccion.objects.create(
+            restriccion=limite_y,
+            variable=self.y,
+            coeficiente=1,
+        )
+
+    def test_listar_problemas(self):
+        respuesta = self.client.get("/api/problemas/")
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(len(respuesta.data), 1)
+        self.assertEqual(
+            respuesta.data[0]["nombre"],
+            "Problema de prueba API",
+        )
+
+    def test_detalle_problema(self):
+        respuesta = self.client.get(
+            f"/api/problemas/{self.problema.id}/"
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(
+            respuesta.data["variables"].__len__(),
+            2,
+        )
+        self.assertEqual(
+            respuesta.data["restricciones"].__len__(),
+            3,
+        )
+
+    def test_resolver_problema(self):
+        respuesta = self.client.post(
+            f"/api/problemas/{self.problema.id}/resolver/"
+        )
+
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertEqual(respuesta.data["estado"], "OPT")
+        self.assertAlmostEqual(
+            float(respuesta.data["valor_objetivo"]),
+            19.5,
+            places=4,
+        )
+
+    def test_no_resolver_problema_inactivo(self):
+        self.problema.activo = False
+        self.problema.save()
+
+        respuesta = self.client.post(
+            f"/api/problemas/{self.problema.id}/resolver/"
+        )
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn("error", respuesta.data)
