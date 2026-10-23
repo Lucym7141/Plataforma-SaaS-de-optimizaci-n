@@ -1,6 +1,11 @@
 
 const API_URL = "/api";
 
+const authPanel = document.getElementById("auth-panel");
+const authMessage = document.getElementById("auth-message");
+const appContent = document.getElementById("app-content");
+const accountControls = document.querySelector(".account-controls");
+const statusLabel = document.getElementById("status-label");
 const problemsList = document.getElementById("problems-list");
 const refreshButton = document.getElementById("refresh-button");
 const emptyState = document.getElementById("empty-state");
@@ -12,7 +17,25 @@ const resultsSection = document.getElementById("results-section");
 let selectedProblemId = null;
 
 async function requestJSON(url, options = {}) {
-    const response = await fetch(url, options);
+    const headers = new Headers(options.headers || {});
+    const method = (options.method || "GET").toUpperCase();
+
+    if (method !== "GET" && method !== "HEAD") {
+        const csrfToken = document.cookie
+            .split("; ")
+            .find((cookie) => cookie.startsWith("csrftoken="))
+            ?.slice("csrftoken=".length);
+
+        if (csrfToken) {
+            headers.set("X-CSRFToken", csrfToken);
+        }
+    }
+
+    const response = await fetch(url, {
+        ...options,
+        headers,
+        credentials: "same-origin"
+    });
 
     let data;
 
@@ -24,11 +47,14 @@ async function requestJSON(url, options = {}) {
 
     if (!response.ok) {
         const detail = data.detail || data.error || data.mensaje;
-        throw new Error(
-            typeof detail === "string"
-                ? detail
-                : `La solicitud falló con el código ${response.status}.`
-        );
+        const message = typeof detail === "string"
+            ? detail
+            : Object.keys(data).length
+                ? JSON.stringify(data)
+                : `La solicitud falló con el código ${response.status}.`;
+        const error = new Error(message);
+        error.status = response.status;
+        throw error;
     }
 
     return data;
@@ -127,6 +153,46 @@ function getProblemId(problem) {
     return problem.id ?? problem.pk;
 }
 
+function showAuthentication(message = "") {
+    authPanel.hidden = false;
+    appContent.hidden = true;
+    accountControls.hidden = true;
+    statusLabel.hidden = false;
+    statusLabel.innerHTML = '<span class="status-dot"></span> Acceso seguro';
+    authMessage.textContent = message;
+    authMessage.hidden = !message;
+}
+
+function showApplication(user) {
+    authPanel.hidden = true;
+    appContent.hidden = false;
+    accountControls.hidden = false;
+    statusLabel.hidden = true;
+    document.getElementById("account-name").textContent =
+        `Conectado como ${user.username}`;
+}
+
+async function submitAuthentication(event, endpoint) {
+    event.preventDefault();
+    authMessage.hidden = true;
+
+    const formData = new FormData(event.currentTarget);
+    const payload = Object.fromEntries(formData.entries());
+
+    try {
+        const user = await requestJSON(`${API_URL}/auth/${endpoint}/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+        showApplication(user);
+        await loadProblems();
+    } catch (error) {
+        authMessage.textContent = error.message;
+        authMessage.hidden = false;
+    }
+}
+
 async function loadProblems() {
     problemsList.innerHTML = '<p class="muted">Cargando problemas...</p>';
     refreshButton.disabled = true;
@@ -190,6 +256,10 @@ async function loadProblems() {
             await loadProblem(getProblemId(problems[0]));
         }
     } catch (error) {
+        if (error.status === 401 || error.status === 403) {
+            showAuthentication("Tu sesión terminó. Inicia sesión nuevamente.");
+            return;
+        }
         problemsList.innerHTML = `
             <p class="muted">
                 No fue posible cargar los problemas.
@@ -388,4 +458,68 @@ async function solveProblem() {
 refreshButton.addEventListener("click", loadProblems);
 solveButton.addEventListener("click", solveProblem);
 
-loadProblems();
+document.getElementById("login-tab").addEventListener("click", () => {
+    document.getElementById("login-form").hidden = false;
+    document.getElementById("register-form").hidden = true;
+    document.getElementById("login-tab").classList.add("selected");
+    document.getElementById("register-tab").classList.remove("selected");
+    document.getElementById("login-tab").setAttribute("aria-selected", "true");
+    document.getElementById("register-tab").setAttribute("aria-selected", "false");
+    document.getElementById("auth-title").textContent = "Inicia sesión";
+    authMessage.hidden = true;
+});
+
+document.getElementById("register-tab").addEventListener("click", () => {
+    document.getElementById("login-form").hidden = true;
+    document.getElementById("register-form").hidden = false;
+    document.getElementById("login-tab").classList.remove("selected");
+    document.getElementById("register-tab").classList.add("selected");
+    document.getElementById("login-tab").setAttribute("aria-selected", "false");
+    document.getElementById("register-tab").setAttribute("aria-selected", "true");
+    document.getElementById("auth-title").textContent = "Crea tu cuenta";
+    authMessage.hidden = true;
+});
+
+document.getElementById("login-form").addEventListener("submit", (event) => {
+    submitAuthentication(event, "login");
+});
+
+document.getElementById("register-form").addEventListener("submit", (event) => {
+    submitAuthentication(event, "registro");
+});
+
+document.getElementById("logout-button").addEventListener("click", async () => {
+    try {
+        await requestJSON(`${API_URL}/auth/logout/`, { method: "POST" });
+        showAuthentication();
+    } catch (error) {
+        showAuthentication(`No se pudo cerrar sesión: ${error.message}`);
+    }
+});
+
+async function initialize() {
+    try {
+        const user = await requestJSON(`${API_URL}/auth/me/`);
+        showApplication(user);
+        await loadProblems();
+    } catch (error) {
+        if (error.status === 401) {
+            try {
+                const config = await requestJSON(`${API_URL}/auth/config/`);
+                document.getElementById("register-tab").hidden =
+                    !config.registration_enabled;
+                showAuthentication(
+                    config.registration_enabled
+                        ? ""
+                        : "El registro de nuevas cuentas está cerrado."
+                );
+            } catch (configError) {
+                showAuthentication(`No fue posible conectar: ${configError.message}`);
+            }
+            return;
+        }
+        showAuthentication(`No fue posible conectar: ${error.message}`);
+    }
+}
+
+initialize();

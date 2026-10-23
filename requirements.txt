@@ -1,0 +1,5 @@
+Django==6.1.2
+djangorestframework==3.18.3
+numpy==2.5.4
+psycopg[binary]==3.3.6
+pulp[cbc]==4.2.0

@@ -15,10 +15,43 @@
             <span class="brand-icon">O</span>
             <span>OptiPortfolio <strong>AI</strong></span>
         </a>
-        <span class="status"><span class="status-dot"></span> Plataforma de optimización</span>
+        <div class="account-controls" hidden>
+            <span id="account-name" class="status"></span>
+            <button id="logout-button" class="secondary-button" type="button">Cerrar sesión</button>
+        </div>
+        <span id="status-label" class="status"><span class="status-dot"></span> Acceso seguro</span>
     </header>
 
     <main class="container">
+        <section id="auth-panel" class="panel auth-panel" hidden>
+            <p class="section-label">ACCESO SEGURO</p>
+            <h1 id="auth-title">Inicia sesión</h1>
+            <p class="muted">Tus problemas y resultados solo estarán disponibles para tu cuenta.</p>
+            <div class="auth-tabs" role="tablist" aria-label="Acceso">
+                <button id="login-tab" class="auth-tab selected" type="button" role="tab" aria-selected="true">Iniciar sesión</button>
+                <button id="register-tab" class="auth-tab" type="button" role="tab" aria-selected="false">Crear cuenta</button>
+            </div>
+            <form id="login-form" class="auth-form">
+                <label for="login-username">Usuario</label>
+                <input id="login-username" name="username" autocomplete="username" required>
+                <label for="login-password">Contraseña</label>
+                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                <button class="primary-button" type="submit">Iniciar sesión</button>
+            </form>
+            <form id="register-form" class="auth-form" hidden>
+                <label for="register-username">Usuario</label>
+                <input id="register-username" name="username" autocomplete="username" maxlength="150" required>
+                <label for="register-email">Correo (opcional)</label>
+                <input id="register-email" name="email" type="email" autocomplete="email">
+                <label for="register-password">Contraseña</label>
+                <input id="register-password" name="password" type="password" autocomplete="new-password" required>
+                <p class="muted">La contraseña debe cumplir las reglas de seguridad configuradas.</p>
+                <button class="primary-button" type="submit">Crear cuenta</button>
+            </form>
+            <p id="auth-message" class="message error-message" role="alert" hidden></p>
+        </section>
+
+        <div id="app-content" hidden>
         <section class="hero">
             <p class="eyebrow">OPTIMIZACIÓN MATEMÁTICA</p>
             <h1>Convierte tus problemas<br>en <span>soluciones óptimas.</span></h1>
@@ -109,6 +142,7 @@
         </section>
 
         <p class="footer-note">OptiPortfolio AI · Herramienta académica de optimización matemática</p>
+        </div>
     </main>
 </body>
 </html>

@@ -1,6 +1,7 @@
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.conf import settings
 
 
 class ProblemaOptimizacion(models.Model):
@@ -12,6 +13,13 @@ class ProblemaOptimizacion(models.Model):
 
     nombre = models.CharField(max_length=150)
     descripcion = models.TextField(blank=True)
+    propietario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="problemas_optimizacion",
+        null=True,
+        blank=True,
+    )
     tipo_objetivo = models.CharField(
         max_length=3,
         choices=TipoObjetivo.choices,
@@ -296,3 +304,11 @@ class ValorSolucion(models.Model):
 
     def __str__(self):
         return f"{self.variable.nombre} = {self.valor}"
+
+
+class RateLimitCounter(models.Model):
+    """Contador de solicitudes por identidad y ventana temporal."""
+
+    key = models.CharField(max_length=64, unique=True)
+    count = models.PositiveIntegerField(default=0)
+    expires_at = models.DateTimeField(db_index=True)

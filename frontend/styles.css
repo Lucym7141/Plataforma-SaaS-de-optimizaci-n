@@ -78,6 +78,78 @@ button {
     background: #20b486;
 }
 
+.account-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.auth-panel {
+    max-width: 480px;
+    margin: 70px auto;
+}
+
+.auth-panel h1 {
+    margin: 12px 0 6px;
+    font-size: 28px;
+}
+
+.auth-tabs {
+    display: flex;
+    gap: 8px;
+    margin: 24px 0 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+.auth-tab {
+    padding: 10px 12px;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+}
+
+.auth-tab.selected {
+    color: var(--primary-dark);
+    border-bottom-color: var(--primary);
+    font-weight: 700;
+}
+
+.auth-form {
+    display: grid;
+    gap: 10px;
+}
+
+.auth-form label {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.auth-form input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font: inherit;
+}
+
+.auth-form input:focus {
+    outline: 2px solid #b7aff8;
+    border-color: var(--primary);
+}
+
+.secondary-button {
+    padding: 9px 12px;
+    color: var(--primary-dark);
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .container {
     width: min(1240px, 90%);
     margin: 0 auto;
@@ -499,6 +571,11 @@ button {
 
     .status {
         font-size: 11px;
+    }
+
+    .account-controls {
+        width: 100%;
+        justify-content: space-between;
     }
 
     .container {

@@ -1,6 +1,10 @@
 
 from rest_framework import serializers
 from django.db import transaction
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.contrib.auth.password_validation import validate_password
+from django.conf import settings
 
 from .models import (
     ProblemaOptimizacion,
@@ -11,6 +15,43 @@ from .models import (
     EjecucionOptimizacion,
     ValorSolucion,
 )
+
+Usuario = get_user_model()
+
+
+class RegistroUsuarioSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(
+        write_only=True,
+        trim_whitespace=False,
+        style={"input_type": "password"},
+    )
+
+    class Meta:
+        model = Usuario
+        fields = ["id", "username", "email", "password"]
+        extra_kwargs = {
+            "email": {"required": False, "allow_blank": True},
+        }
+
+    def validate(self, attrs):
+        usuario = Usuario(
+            username=attrs["username"],
+            email=attrs.get("email", ""),
+        )
+        try:
+            validate_password(attrs["password"], user=usuario)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({
+                "password": error.messages,
+            }) from error
+        return attrs
+
+    def create(self, validated_data):
+        password = validated_data.pop("password")
+        return Usuario.objects.create_user(
+            password=password,
+            **validated_data,
+        )
 
 
 class VariableDecisionSerializer(serializers.ModelSerializer):
@@ -220,6 +261,12 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
         ]
 
     def validate_variables(self, value):
+        if len(value) > settings.OPTIMIZER_MAX_VARIABLES:
+            raise serializers.ValidationError(
+                f"El modelo supera el máximo de "
+                f"{settings.OPTIMIZER_MAX_VARIABLES} variables."
+            )
+
         nombres = [variable["nombre"] for variable in value]
 
         if len(nombres) != len(set(nombres)):
@@ -231,6 +278,17 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
             inferior = variable.get("limite_inferior")
             superior = variable.get("limite_superior")
             tipo = variable.get("tipo", "CONT")
+
+            if any(
+                bound is not None
+                and abs(bound) > settings.OPTIMIZER_MAX_ABS_VALUE
+                for bound in (inferior, superior)
+            ):
+                raise serializers.ValidationError(
+                    f"Los límites de '{variable['nombre']}' superan el "
+                    f"valor absoluto máximo de "
+                    f"{settings.OPTIMIZER_MAX_ABS_VALUE}."
+                )
 
             if (
                 inferior is not None
@@ -258,6 +316,15 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        restricciones = attrs.get("restricciones", [])
+        if len(restricciones) > settings.OPTIMIZER_MAX_CONSTRAINTS:
+            raise serializers.ValidationError({
+                "restricciones": (
+                    f"El modelo supera el máximo de "
+                    f"{settings.OPTIMIZER_MAX_CONSTRAINTS} restricciones."
+                )
+            })
+
         nombres_variables = {
             variable["nombre"] for variable in attrs["variables"]
         }
@@ -282,11 +349,17 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
                     )
                 })
 
-        nombres_restricciones = [
-            restriccion["nombre"] for restriccion in attrs.get(
-                "restricciones", []
-            )
+        total_terminos = len(attrs["terminos_objetivo"])
+        valores = [
+            termino["coeficiente"]
+            for termino in attrs["terminos_objetivo"]
         ]
+        valores.extend(
+            restriccion["lado_derecho"]
+            for restriccion in restricciones
+        )
+
+        nombres_restricciones = [restriccion["nombre"] for restriccion in restricciones]
 
         if len(nombres_restricciones) != len(set(nombres_restricciones)):
             raise serializers.ValidationError({
@@ -295,7 +368,12 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
                 )
             })
 
-        for restriccion in attrs.get("restricciones", []):
+        for restriccion in restricciones:
+            total_terminos += len(restriccion["terminos"])
+            valores.extend(
+                termino["coeficiente"]
+                for termino in restriccion["terminos"]
+            )
             for termino in restriccion["terminos"]:
                 nombre = termino["variable_nombre"]
 
@@ -307,6 +385,23 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
                         )
                     })
 
+        if total_terminos > settings.OPTIMIZER_MAX_TERMS:
+            raise serializers.ValidationError({
+                "terminos_objetivo": (
+                    f"El modelo supera el máximo de "
+                    f"{settings.OPTIMIZER_MAX_TERMS} términos."
+                )
+            })
+
+        if any(
+            abs(value) > settings.OPTIMIZER_MAX_ABS_VALUE
+            for value in valores
+        ):
+            raise serializers.ValidationError(
+                "Los coeficientes y lados derechos no pueden superar "
+                f"el valor absoluto de {settings.OPTIMIZER_MAX_ABS_VALUE}."
+            )
+
         return attrs
 
     @transaction.atomic
@@ -316,6 +411,7 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
         restricciones_data = validated_data.pop("restricciones", [])
 
         problema = ProblemaOptimizacion.objects.create(
+            propietario=self.context["request"].user,
             **validated_data
         )
 

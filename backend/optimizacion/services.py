@@ -2,6 +2,7 @@
 from decimal import Decimal
 
 import pulp
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -54,6 +55,44 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
                 "El problema debe tener al menos un término "
                 "en la función objetivo."
             )
+
+        if len(variables_db) > settings.OPTIMIZER_MAX_VARIABLES:
+            raise ValueError("El modelo supera el límite de variables.")
+
+        if len(restricciones_db) > settings.OPTIMIZER_MAX_CONSTRAINTS:
+            raise ValueError("El modelo supera el límite de restricciones.")
+
+        total_terminos = len(terminos_objetivo) + sum(
+            len(restriccion.terminos.all())
+            for restriccion in restricciones_db
+        )
+        if total_terminos > settings.OPTIMIZER_MAX_TERMS:
+            raise ValueError("El modelo supera el límite de términos.")
+
+        maximo_absoluto = Decimal(settings.OPTIMIZER_MAX_ABS_VALUE)
+        valores = [
+            termino.coeficiente for termino in terminos_objetivo
+        ]
+        valores.extend(
+            restriccion.lado_derecho
+            for restriccion in restricciones_db
+        )
+        for restriccion in restricciones_db:
+            valores.extend(
+                termino.coeficiente
+                for termino in restriccion.terminos.all()
+            )
+        for variable in variables_db:
+            valores.extend(
+                limite
+                for limite in (
+                    variable.limite_inferior,
+                    variable.limite_superior,
+                )
+                if limite is not None
+            )
+        if any(abs(valor) > maximo_absoluto for valor in valores):
+            raise ValueError("El modelo supera el límite numérico permitido.")
 
         # Crear el modelo: maximización o minimización.
         sentido = (
@@ -157,7 +196,13 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
                 )
 
         # Ejecutar el solucionador de PuLP.
-        estadisticas = modelo.solve(pulp.COIN_CMD(msg=False))
+        estadisticas = modelo.solve(
+            pulp.COIN_CMD(
+                msg=False,
+                timeLimit=settings.OPTIMIZER_TIME_LIMIT_SECONDS,
+                threads=1,
+            )
+        )
 
         estado_pulp = estadisticas.status_str
 

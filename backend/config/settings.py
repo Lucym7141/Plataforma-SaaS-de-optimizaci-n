@@ -10,7 +10,35 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
+
+from django.core.exceptions import ImproperlyConfigured
+from django.core.management.utils import get_random_secret_key
+
+
+def env_bool(name, default=False):
+    return os.environ.get(name, str(default)).lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def validate_rate(name, value):
+    try:
+        requests, period = value.split("/")
+        valid = int(requests) > 0 and period in {"s", "m", "h", "d"}
+    except (ValueError, AttributeError):
+        valid = False
+    if not valid:
+        raise ImproperlyConfigured(
+            f"{name} debe usar un formato como '5/m', '10/h' o '100/d'."
+        )
+    return value
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -19,13 +47,95 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-&uk8@ku5g+dn+egl=z##3-u0d%n)6h)v9yu06+0$kmj+w@vkn$'
+DEBUG = env_bool("DJANGO_DEBUG", True)
+ALLOW_REGISTRATION = env_bool("DJANGO_ALLOW_REGISTRATION", DEBUG)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    if not DEBUG:
+        raise ImproperlyConfigured(
+            "Configura DJANGO_SECRET_KEY cuando DEBUG está desactivado."
+        )
+    SECRET_KEY = get_random_secret_key()
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "Define DJANGO_ALLOWED_HOSTS como una lista separada por comas."
+    )
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = int(
+    os.environ.get(
+        "DJANGO_SECURE_HSTS_SECONDS",
+        "31536000" if not DEBUG else "0",
+    )
+)
+if not DEBUG and SECURE_HSTS_SECONDS < 1:
+    raise ImproperlyConfigured(
+        "SECURE_HSTS_SECONDS debe ser positivo en producción."
+    )
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+    "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS"
+)
+SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD")
+SECURE_CONTENT_TYPE_NOSNIFF = True
+SECURE_REFERRER_POLICY = "same-origin"
+X_FRAME_OPTIONS = "DENY"
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+if env_bool("DJANGO_TRUST_PROXY_HEADERS"):
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+OPTIMIZER_MAX_VARIABLES = int(os.environ.get("OPTIMIZER_MAX_VARIABLES", "100"))
+OPTIMIZER_MAX_CONSTRAINTS = int(
+    os.environ.get("OPTIMIZER_MAX_CONSTRAINTS", "200")
+)
+OPTIMIZER_MAX_TERMS = int(os.environ.get("OPTIMIZER_MAX_TERMS", "5000"))
+OPTIMIZER_MAX_ABS_VALUE = int(
+    os.environ.get("OPTIMIZER_MAX_ABS_VALUE", "1000000000000")
+)
+OPTIMIZER_TIME_LIMIT_SECONDS = int(
+    os.environ.get("OPTIMIZER_TIME_LIMIT_SECONDS", "30")
+)
+AUTH_SIGNUP_LIMIT = os.environ.get("AUTH_SIGNUP_LIMIT", "5/h")
+AUTH_LOGIN_LIMIT = os.environ.get("AUTH_LOGIN_LIMIT", "10/m")
+OPTIMIZER_SOLVE_LIMIT = os.environ.get("OPTIMIZER_SOLVE_LIMIT", "5/m")
+DATA_UPLOAD_MAX_MEMORY_SIZE = 1_048_576
+AUTH_SIGNUP_LIMIT = validate_rate("AUTH_SIGNUP_LIMIT", AUTH_SIGNUP_LIMIT)
+AUTH_LOGIN_LIMIT = validate_rate("AUTH_LOGIN_LIMIT", AUTH_LOGIN_LIMIT)
+OPTIMIZER_SOLVE_LIMIT = validate_rate(
+    "OPTIMIZER_SOLVE_LIMIT",
+    OPTIMIZER_SOLVE_LIMIT,
+)
+if not 1 <= OPTIMIZER_MAX_VARIABLES <= 500:
+    raise ImproperlyConfigured(
+        "OPTIMIZER_MAX_VARIABLES debe estar entre 1 y 500."
+    )
+if not 1 <= OPTIMIZER_MAX_CONSTRAINTS <= 1000:
+    raise ImproperlyConfigured(
+        "OPTIMIZER_MAX_CONSTRAINTS debe estar entre 1 y 1000."
+    )
+if not 1 <= OPTIMIZER_MAX_TERMS <= 20000:
+    raise ImproperlyConfigured(
+        "OPTIMIZER_MAX_TERMS debe estar entre 1 y 20000."
+    )
+if not 1 <= OPTIMIZER_MAX_ABS_VALUE <= 100000000000000:
+    raise ImproperlyConfigured(
+        "OPTIMIZER_MAX_ABS_VALUE debe estar entre 1 y 1e14."
+    )
+if not 1 <= OPTIMIZER_TIME_LIMIT_SECONDS <= 300:
+    raise ImproperlyConfigured(
+        "OPTIMIZER_TIME_LIMIT_SECONDS debe estar entre 1 y 300."
+    )
 
 
 # Application definition
@@ -43,6 +153,24 @@ INSTALLED_APPS = [
     # Aplicación principal de optimización
     'optimizacion',
 ]
+
+REST_FRAMEWORK = {
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'signup': AUTH_SIGNUP_LIMIT,
+        'login': AUTH_LOGIN_LIMIT,
+        'solve': OPTIMIZER_SOLVE_LIMIT,
+    },
+}
+if os.environ.get("DJANGO_NUM_PROXIES"):
+    REST_FRAMEWORK["NUM_PROXIES"] = int(os.environ["DJANGO_NUM_PROXIES"])
+    if REST_FRAMEWORK["NUM_PROXIES"] < 1:
+        raise ImproperlyConfigured("DJANGO_NUM_PROXIES debe ser positivo.")
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -79,14 +207,46 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 
 # Database
-# https://docs.djangoproject.com/en/6.1/ref/settings/#databases
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if DATABASE_URL:
+    parsed_database_url = urlparse(DATABASE_URL)
+    if parsed_database_url.scheme not in {"postgres", "postgresql"}:
+        raise ImproperlyConfigured(
+            "DATABASE_URL debe usar el esquema postgresql://."
+        )
+    if not parsed_database_url.path.strip("/") or not parsed_database_url.hostname:
+        raise ImproperlyConfigured(
+            "DATABASE_URL debe incluir el host y el nombre de la base."
+        )
+    query = parse_qs(parsed_database_url.query)
+    sslmode = query.get("sslmode", ["require"])[0]
+    if sslmode not in {"require", "verify-ca", "verify-full"}:
+        raise ImproperlyConfigured(
+            "La conexión PostgreSQL debe usar sslmode=require o más estricto."
+        )
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": unquote(parsed_database_url.path.lstrip("/")),
+            "USER": unquote(parsed_database_url.username or ""),
+            "PASSWORD": unquote(parsed_database_url.password or ""),
+            "HOST": parsed_database_url.hostname or "",
+            "PORT": parsed_database_url.port or "",
+            "OPTIONS": {"sslmode": sslmode},
+            "CONN_MAX_AGE": 60,
+        }
     }
-}
+elif DEBUG:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+else:
+    raise ImproperlyConfigured(
+        "Configura DATABASE_URL con una base PostgreSQL para producción."
+    )
 
 
 # Password validation
@@ -124,6 +284,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 
 # Email
