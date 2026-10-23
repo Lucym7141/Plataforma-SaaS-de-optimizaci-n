@@ -36,54 +36,6 @@ async function requestJSON(url, options = {}) {
         }
     }
 
-    function renderFrontier(result) {
-        const points = result.puntos || [];
-        if (!points.length) {
-            throw new Error("No se recibieron puntos para la frontera eficiente.");
-        }
-        const width = 700;
-        const height = 360;
-        const padding = { left: 72, right: 24, top: 24, bottom: 58 };
-        const xValues = points.map((point) => Number(point.volatilidad_portafolio));
-        const yValues = points.map((point) => Number(point.rendimientos_portafolio));
-        const xMin = Math.min(...xValues);
-        const xMax = Math.max(...xValues);
-        const yMin = Math.min(...yValues);
-        const yMax = Math.max(...yValues);
-        const xSpan = xMax - xMin || 1;
-        const ySpan = yMax - yMin || 1;
-        const x = (value) => padding.left +
-            ((value - xMin) / xSpan) * (width - padding.left - padding.right);
-        const y = (value) => height - padding.bottom -
-            ((value - yMin) / ySpan) * (height - padding.top - padding.bottom);
-        const coordinates = points.map((point) =>
-            `${x(Number(point.volatilidad_portafolio))},${y(Number(point.rendimientos_portafolio))}`
-        ).join(" ");
-        const circles = points.map((point) => `
-            <circle cx="${x(Number(point.volatilidad_portafolio))}"
-                cy="${y(Number(point.rendimientos_portafolio))}" r="4">
-                <title>Volatilidad ${escapeHTML(formatNumber(point.volatilidad_portafolio))};
-                    rendimiento ${escapeHTML(formatNumber(point.rendimientos_portafolio))}</title>
-            </circle>`).join("");
-        document.getElementById("frontier-chart").innerHTML = `
-            <svg class="frontier-svg" viewBox="0 0 ${width} ${height}" role="img"
-                aria-label="Frontera eficiente: volatilidad frente a rendimiento">
-                <line class="chart-axis" x1="${padding.left}" y1="${height - padding.bottom}"
-                    x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
-                <line class="chart-axis" x1="${padding.left}" y1="${padding.top}"
-                    x2="${padding.left}" y2="${height - padding.bottom}"></line>
-                <polyline class="frontier-line" points="${coordinates}"></polyline>
-                ${circles}
-                <text class="chart-label" x="${width / 2}" y="${height - 12}" text-anchor="middle">Volatilidad (desviación estándar)</text>
-                <text class="chart-label" transform="translate(18 ${height / 2}) rotate(-90)" text-anchor="middle">Rendimiento esperado</text>
-                <text class="chart-tick" x="${padding.left}" y="${height - padding.bottom + 20}">${escapeHTML(formatNumber(xMin))}</text>
-                <text class="chart-tick" x="${width - padding.right}" y="${height - padding.bottom + 20}" text-anchor="end">${escapeHTML(formatNumber(xMax))}</text>
-                <text class="chart-tick" x="${padding.left - 8}" y="${height - padding.bottom}" text-anchor="end">${escapeHTML(formatNumber(yMin))}</text>
-                <text class="chart-tick" x="${padding.left - 8}" y="${padding.top + 4}" text-anchor="end">${escapeHTML(formatNumber(yMax))}</text>
-            </svg>`;
-        document.getElementById("frontier-section").hidden = false;
-    }
-
     const response = await fetch(url, {
         ...options,
         headers,
@@ -115,6 +67,54 @@ async function requestJSON(url, options = {}) {
     }
 
     return data;
+}
+
+function renderFrontier(result) {
+    const points = result.puntos || [];
+    if (!points.length) {
+        throw new Error("No se recibieron puntos para la frontera eficiente.");
+    }
+    const width = 700;
+    const height = 360;
+    const padding = { left: 72, right: 24, top: 24, bottom: 58 };
+    const xValues = points.map((point) => Number(point.volatilidad_portafolio));
+    const yValues = points.map((point) => Number(point.rendimientos_portafolio));
+    const xMin = Math.min(...xValues);
+    const xMax = Math.max(...xValues);
+    const yMin = Math.min(...yValues);
+    const yMax = Math.max(...yValues);
+    const xSpan = xMax - xMin || 1;
+    const ySpan = yMax - yMin || 1;
+    const x = (value) => padding.left +
+        ((value - xMin) / xSpan) * (width - padding.left - padding.right);
+    const y = (value) => height - padding.bottom -
+        ((value - yMin) / ySpan) * (height - padding.top - padding.bottom);
+    const coordinates = points.map((point) =>
+        `${x(Number(point.volatilidad_portafolio))},${y(Number(point.rendimientos_portafolio))}`
+    ).join(" ");
+    const circles = points.map((point) => `
+        <circle cx="${x(Number(point.volatilidad_portafolio))}"
+            cy="${y(Number(point.rendimientos_portafolio))}" r="4">
+            <title>Volatilidad ${escapeHTML(formatNumber(point.volatilidad_portafolio))};
+                rendimiento ${escapeHTML(formatNumber(point.rendimientos_portafolio))}</title>
+        </circle>`).join("");
+    document.getElementById("frontier-chart").innerHTML = `
+        <svg class="frontier-svg" viewBox="0 0 ${width} ${height}" role="img"
+            aria-label="Frontera eficiente: volatilidad frente a rendimiento">
+            <line class="chart-axis" x1="${padding.left}" y1="${height - padding.bottom}"
+                x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
+            <line class="chart-axis" x1="${padding.left}" y1="${padding.top}"
+                x2="${padding.left}" y2="${height - padding.bottom}"></line>
+            <polyline class="frontier-line" points="${coordinates}"></polyline>
+            ${circles}
+            <text class="chart-label" x="${width / 2}" y="${height - 12}" text-anchor="middle">Volatilidad (desviación estándar)</text>
+            <text class="chart-label" transform="translate(18 ${height / 2}) rotate(-90)" text-anchor="middle">Rendimiento esperado</text>
+            <text class="chart-tick" x="${padding.left}" y="${height - padding.bottom + 20}">${escapeHTML(formatNumber(xMin))}</text>
+            <text class="chart-tick" x="${width - padding.right}" y="${height - padding.bottom + 20}" text-anchor="end">${escapeHTML(formatNumber(xMax))}</text>
+            <text class="chart-tick" x="${padding.left - 8}" y="${height - padding.bottom}" text-anchor="end">${escapeHTML(formatNumber(yMin))}</text>
+            <text class="chart-tick" x="${padding.left - 8}" y="${padding.top + 4}" text-anchor="end">${escapeHTML(formatNumber(yMax))}</text>
+        </svg>`;
+    document.getElementById("frontier-section").hidden = false;
 }
 
 function escapeHTML(value) {

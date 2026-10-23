@@ -74,8 +74,24 @@ solo `{"status":"ok"}` o un estado HTTP 503 genérico; úsalo como sonda de
 disponibilidad, no como sustituto de monitoreo de aplicación.
 
 Las GitHub Actions ejecutan migraciones, comprobaciones de Django, tests y
-validación sintáctica de JavaScript en cada push y pull request. El flujo no
-despliega automáticamente a producción.
+validación sintáctica de JavaScript y pruebas de navegador en Chromium contra
+PostgreSQL 16 en cada push y pull request. El flujo no despliega
+automáticamente a producción.
+
+Para ejecutar las pruebas de navegador localmente, instala Node.js y Chromium:
+
+```powershell
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+Playwright aplica las migraciones y prepara cuentas y modelos de prueba en la
+base configurada por Django. En desarrollo puede usar SQLite; CI ejecuta las
+mismas pruebas con PostgreSQL. `sslmode=disable` solo se permite mientras
+`DJANGO_DEBUG=true` para conectar a la base local de CI; la configuración de
+producción sigue exigiendo TLS. Al finalizar, Playwright elimina las cuentas y
+los modelos de prueba que creó.
 
 ## Límites y registro
 

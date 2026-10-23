@@ -283,9 +283,13 @@ if DATABASE_URL:
         )
     query = parse_qs(parsed_database_url.query)
     sslmode = query.get("sslmode", ["require"])[0]
-    if sslmode not in {"require", "verify-ca", "verify-full"}:
+    allowed_ssl_modes = {"require", "verify-ca", "verify-full"}
+    if DEBUG:
+        allowed_ssl_modes.add("disable")
+    if sslmode not in allowed_ssl_modes:
         raise ImproperlyConfigured(
-            "La conexión PostgreSQL debe usar sslmode=require o más estricto."
+            "PostgreSQL requiere sslmode=require o más estricto; sslmode=disable "
+            "solo se permite en desarrollo."
         )
     DATABASES = {
         "default": {

@@ -154,6 +154,9 @@ activemq-data/
 .envrc
 .venv
 .opencode/
+node_modules/
+playwright-report/
+test-results/
 env/
 venv/
 ENV/
