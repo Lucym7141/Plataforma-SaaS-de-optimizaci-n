@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Frontend React / Vite
+frontend-vite/node_modules/
+frontend-vite/dist/
+frontend-vite/.env
+frontend-vite/.env.*
+!frontend-vite/.env.example
+
+# Entorno y configuración local
+.vscode/
