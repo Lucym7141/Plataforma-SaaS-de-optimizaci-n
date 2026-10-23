@@ -17,6 +17,9 @@
         </a>
         <div class="account-controls" hidden>
             <span id="account-name" class="status"></span>
+            <button id="export-account-button" class="secondary-button" type="button">Exportar mis datos</button>
+            <button id="change-password-button" class="secondary-button" type="button">Cambiar contraseña</button>
+            <button id="delete-account-button" class="secondary-button danger-button" type="button">Eliminar cuenta</button>
             <button id="logout-button" class="secondary-button" type="button">Cerrar sesión</button>
         </div>
         <span id="status-label" class="status"><span class="status-dot"></span> Acceso seguro</span>
@@ -41,12 +44,29 @@
             <form id="register-form" class="auth-form" hidden>
                 <label for="register-username">Usuario</label>
                 <input id="register-username" name="username" autocomplete="username" maxlength="150" required>
-                <label for="register-email">Correo (opcional)</label>
-                <input id="register-email" name="email" type="email" autocomplete="email">
+                <label for="register-email">Correo</label>
+                <input id="register-email" name="email" type="email" autocomplete="email" required>
                 <label for="register-password">Contraseña</label>
                 <input id="register-password" name="password" type="password" autocomplete="new-password" required>
                 <p class="muted">La contraseña debe cumplir las reglas de seguridad configuradas.</p>
                 <button class="primary-button" type="submit">Crear cuenta</button>
+            </form>
+            <button id="resend-verification-button" class="text-button" type="button">Reenviar verificación de correo</button>
+            <form id="resend-verification-form" class="auth-form" hidden>
+                <label for="resend-email">Correo de la cuenta</label>
+                <input id="resend-email" name="email" type="email" autocomplete="email" required>
+                <button class="secondary-button" type="submit">Enviar enlace de verificación</button>
+            </form>
+            <button id="password-reset-button" class="text-button" type="button">Olvidé mi contraseña</button>
+            <form id="password-reset-form" class="auth-form" hidden>
+                <label for="reset-email">Correo de la cuenta</label>
+                <input id="reset-email" name="email" type="email" autocomplete="email" required>
+                <button class="secondary-button" type="submit">Enviar enlace de recuperación</button>
+            </form>
+            <form id="password-confirm-form" class="auth-form" hidden>
+                <label for="new-password">Nueva contraseña</label>
+                <input id="new-password" name="password" type="password" autocomplete="new-password" required>
+                <button class="primary-button" type="submit">Guardar contraseña nueva</button>
             </form>
             <p id="auth-message" class="message error-message" role="alert" hidden></p>
         </section>
@@ -61,6 +81,80 @@
             </p>
         </section>
 
+        <section class="panel portfolio-panel">
+            <div class="panel-heading">
+                <div>
+                    <p class="section-label">ANÁLISIS MEDIA-VARIANZA</p>
+                    <h2>Portafolios financieros</h2>
+                </div>
+                <div class="panel-actions">
+                    <button id="portfolio-archived-toggle" class="secondary-button" type="button">Archivados</button>
+                    <button id="portfolio-refresh" class="icon-button" type="button" aria-label="Actualizar portafolios">↻</button>
+                </div>
+            </div>
+            <p class="muted">Ingresa rendimientos esperados como fracciones (por ejemplo, 0.08 = 8 %) y una matriz de covarianza en el mismo periodo.</p>
+            <details class="csv-import">
+                <summary>Importar desde CSV y previsualizar</summary>
+                <p class="muted">Usa columnas <code>asset, expected_return</code> y una <code>cov:&lt;activo&gt;</code> por activo. Son opcionales <code>category, min_weight, max_weight</code>. El orden de columnas de covarianza debe coincidir con el orden de las filas.</p>
+                <form id="portfolio-import-form" class="portfolio-form">
+                    <label for="portfolio-import-name">Nombre del portafolio</label>
+                    <input id="portfolio-import-name" name="nombre" maxlength="150">
+                    <label for="portfolio-import-file">Archivo CSV (UTF-8)</label>
+                    <input id="portfolio-import-file" name="archivo" type="file" accept=".csv,text/csv" required>
+                    <button class="secondary-button" type="submit">Validar y previsualizar</button>
+                </form>
+                <p id="portfolio-import-message" class="message" role="status" hidden></p>
+                <div id="portfolio-import-preview" class="solution-values" hidden></div>
+            </details>
+            <form id="portfolio-form" class="portfolio-form">
+                <label for="portfolio-name">Nombre</label>
+                <input id="portfolio-name" name="nombre" maxlength="150" required>
+                <label for="portfolio-assets">Activos (separados por coma)</label>
+                <input id="portfolio-assets" name="activos" placeholder="Bono, Acción" required>
+                <label for="portfolio-categories">Categorías por activo (opcional, misma cantidad; coma separada)</label>
+                <input id="portfolio-categories" name="categorias" placeholder="Renta fija, Acciones">
+                <label for="portfolio-returns">Rendimientos esperados (JSON)</label>
+                <textarea id="portfolio-returns" name="rendimientos" rows="2" placeholder="[0.04, 0.10]" required></textarea>
+                <label for="portfolio-covariance">Matriz de covarianza (JSON)</label>
+                <textarea id="portfolio-covariance" name="covarianza" rows="3" placeholder="[[0.01, 0.002], [0.002, 0.04]]" required></textarea>
+                <label for="portfolio-minimums">Pesos mínimos por activo (JSON; predeterminado: todos 0)</label>
+                <textarea id="portfolio-minimums" name="pesos_minimos" rows="2" placeholder="[0, 0]"></textarea>
+                <label for="portfolio-maximums">Pesos máximos por activo (JSON; predeterminado: todos 1)</label>
+                <textarea id="portfolio-maximums" name="pesos_maximos" rows="2" placeholder="[1, 1]"></textarea>
+                <label for="portfolio-category-limits">Límite máximo por categoría (JSON opcional)</label>
+                <textarea id="portfolio-category-limits" name="limites_categoria" rows="2" placeholder='{"Acciones": 0.60}'></textarea>
+                <label for="portfolio-periods">Periodos por año para métricas anualizadas</label>
+                <select id="portfolio-periods" name="periodos_por_anio">
+                    <option value="1">Anual (1)</option>
+                    <option value="12">Mensual (12)</option>
+                    <option value="52">Semanal (52)</option>
+                    <option value="252">Diario hábil (252)</option>
+                    <option value="365">Diario calendario (365)</option>
+                </select>
+                <label for="portfolio-stress">Rendimientos por activo en escenarios de estrés (JSON opcional)</label>
+                <textarea id="portfolio-stress" name="escenarios_estres" rows="3" placeholder='{"Recesión": [-0.15, -0.30]}'></textarea>
+                <label for="portfolio-risk">Aversión al riesgo (positiva)</label>
+                <input id="portfolio-risk" name="aversion_riesgo" type="number" min="0.000001" step="any" value="1" required>
+                <button class="primary-button" type="submit">Guardar portafolio</button>
+                <button id="portfolio-cancel-edit" class="secondary-button" type="button" hidden>Cancelar edición</button>
+            </form>
+            <p id="portfolio-message" class="message" role="status" hidden></p>
+            <div id="portfolio-list" class="problems-list"></div>
+            <section id="portfolio-result" class="results-section" hidden>
+                <h3>Resultado del portafolio</h3>
+                <div id="portfolio-result-values" class="solution-values"></div>
+            </section>
+            <section id="frontier-section" class="results-section" hidden>
+                <h3>Frontera eficiente</h3>
+                <p class="muted">Cada punto representa una cartera que minimiza el riesgo para un rendimiento objetivo. La curva usa los supuestos ingresados, no predice rendimientos.</p>
+                <div id="frontier-chart"></div>
+            </section>
+            <section id="portfolio-history" class="results-section" hidden>
+                <h3>Historial de ejecuciones</h3>
+                <div id="portfolio-history-list" class="solution-values"></div>
+            </section>
+        </section>
+
         <section class="workspace">
             <aside class="panel problems-panel">
                 <div class="panel-heading">
@@ -68,7 +162,10 @@
                         <p class="section-label">TU ESPACIO DE TRABAJO</p>
                         <h2>Problemas</h2>
                     </div>
-                    <button id="refresh-button" class="icon-button" type="button" title="Actualizar lista" aria-label="Actualizar lista">↻</button>
+                    <div class="panel-actions">
+                        <button id="archived-toggle" class="secondary-button" type="button">Archivados</button>
+                        <button id="refresh-button" class="icon-button" type="button" title="Actualizar lista" aria-label="Actualizar lista">↻</button>
+                    </div>
                 </div>
                 <p class="muted">Selecciona un problema para ver sus detalles.</p>
                 <div id="problems-list" class="problems-list">
@@ -90,6 +187,12 @@
                             <h2 id="problem-title">Problema</h2>
                         </div>
                         <span id="problem-type" class="type-badge">Maximizar</span>
+                    </div>
+                    <div class="model-actions">
+                        <button id="edit-problem-button" class="secondary-button" type="button">Editar nombre y descripción</button>
+                        <button id="duplicate-problem-button" class="secondary-button" type="button">Duplicar</button>
+                        <button id="archive-problem-button" class="secondary-button" type="button">Archivar</button>
+                        <button id="problem-history-button" class="secondary-button" type="button">Historial</button>
                     </div>
 
                     <p id="problem-description" class="muted description"></p>
@@ -137,6 +240,10 @@
                         <div id="solution-values" class="solution-values"></div>
                         <p id="result-message" class="muted result-message"></p>
                     </section>
+                    <section id="problem-history" class="results-section" hidden>
+                        <h3>Historial de ejecuciones</h3>
+                        <div id="problem-history-list" class="solution-values"></div>
+                    </section>
                 </div>
             </section>
         </section>
@@ -144,5 +251,36 @@
         <p class="footer-note">OptiPortfolio AI · Herramienta académica de optimización matemática</p>
         </div>
     </main>
+    <dialog id="delete-account-dialog" class="account-dialog">
+        <form id="delete-account-form" class="auth-form">
+            <h2>Eliminar cuenta y datos</h2>
+            <p class="muted">Esta acción es permanente: se eliminarán tus problemas, portafolios e historiales. Exporta tus datos antes si deseas conservar una copia.</p>
+            <label for="delete-account-password">Contraseña actual</label>
+            <input id="delete-account-password" name="password" type="password" autocomplete="current-password" required>
+            <label for="delete-account-confirmation">Escribe tu nombre de usuario para confirmar</label>
+            <input id="delete-account-confirmation" name="confirmacion" autocomplete="off" required>
+            <div class="model-actions">
+                <button class="danger-button" type="submit">Eliminar permanentemente</button>
+                <button id="cancel-delete-account" class="secondary-button" type="button">Cancelar</button>
+            </div>
+            <p id="delete-account-message" class="message error-message" role="alert" hidden></p>
+        </form>
+    </dialog>
+    <dialog id="change-password-dialog" class="account-dialog">
+        <form id="change-password-form" class="auth-form">
+            <h2>Cambiar contraseña</h2>
+            <label for="current-password">Contraseña actual</label>
+            <input id="current-password" name="old_password" type="password" autocomplete="current-password" required>
+            <label for="changed-password">Contraseña nueva</label>
+            <input id="changed-password" name="new_password1" type="password" autocomplete="new-password" required>
+            <label for="changed-password-confirm">Repite la contraseña nueva</label>
+            <input id="changed-password-confirm" name="new_password2" type="password" autocomplete="new-password" required>
+            <div class="model-actions">
+                <button class="primary-button" type="submit">Actualizar contraseña</button>
+                <button id="cancel-change-password" class="secondary-button" type="button">Cancelar</button>
+            </div>
+            <p id="change-password-message" class="message error-message" role="alert" hidden></p>
+        </form>
+    </dialog>
 </body>
 </html>

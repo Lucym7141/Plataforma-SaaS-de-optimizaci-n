@@ -16,11 +16,25 @@ Including another URLconf
 """
 
 from django.contrib import admin
+from django.db import DatabaseError, connection
+from django.http import JsonResponse
 from django.urls import include, path
+from django.views.decorators.http import require_GET
 from optimizacion import views
+
+
+@require_GET
+def health(request):
+    try:
+        connection.ensure_connection()
+    except DatabaseError:
+        return JsonResponse({"status": "unavailable"}, status=503)
+    return JsonResponse({"status": "ok"})
+
 
 urlpatterns = [
     path("", views.inicio, name="inicio"),
+    path("health/", health, name="health"),
     path("admin/", admin.site.urls),
     path("api/", include("optimizacion.urls")),
 ]

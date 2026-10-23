@@ -75,6 +75,14 @@ class InicioSesionRateThrottle(IPRateThrottle):
     scope = "login"
 
 
+class RestablecerContrasenaRateThrottle(IPRateThrottle):
+    scope = "password_reset"
+
+
+class VerificacionRateThrottle(IPRateThrottle):
+    scope = "verify"
+
+
 class ResolverRateThrottle(AtomicRateThrottle, UserRateThrottle):
     scope = "solve"
 

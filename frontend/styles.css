@@ -84,6 +84,48 @@ button {
     gap: 12px;
 }
 
+.danger-button {
+    padding: 9px 12px;
+    color: #a32332;
+    background: #fff;
+    border: 1px solid #e5aab1;
+    border-radius: 9px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.account-dialog {
+    width: min(480px, 92vw);
+    padding: 24px;
+    color: inherit;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+
+.account-dialog::backdrop {
+    background: rgba(16, 24, 40, 0.55);
+}
+
+.account-dialog h2 {
+    margin: 0 0 8px;
+    font-size: 20px;
+}
+
+.csv-import {
+    max-width: 760px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: #fcfcfe;
+}
+
+.csv-import summary {
+    color: var(--primary-dark);
+    font-weight: 700;
+    cursor: pointer;
+}
+
 .auth-panel {
     max-width: 480px;
     margin: 70px auto;
@@ -148,6 +190,109 @@ button {
     border-radius: 9px;
     font-weight: 700;
     cursor: pointer;
+}
+
+.text-button {
+    justify-self: start;
+    padding: 4px 0;
+    color: var(--primary-dark);
+    background: transparent;
+    border: 0;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.portfolio-panel {
+    margin: 28px 0;
+    padding: 26px;
+}
+
+.portfolio-form {
+    display: grid;
+    gap: 10px;
+    max-width: 760px;
+    margin: 22px 0;
+}
+
+.portfolio-form label {
+    margin-top: 7px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.portfolio-form input,
+.portfolio-form textarea,
+.portfolio-form select {
+    width: 100%;
+    padding: 11px 12px;
+    color: inherit;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font: inherit;
+}
+
+.frontier-svg {
+    display: block;
+    width: 100%;
+    max-width: 760px;
+    height: auto;
+    overflow: visible;
+    margin: 12px auto;
+}
+
+.frontier-svg circle {
+    fill: var(--primary);
+}
+
+.frontier-line {
+    fill: none;
+    stroke: var(--primary);
+    stroke-width: 3;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.chart-axis {
+    stroke: #aab2c0;
+    stroke-width: 1;
+}
+
+.chart-label,
+.chart-tick {
+    fill: #596579;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+.chart-tick {
+    font-size: 10px;
+}
+
+.portfolio-form textarea {
+    resize: vertical;
+    font-family: Consolas, monospace;
+}
+
+.model-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.portfolio-card {
+    display: block;
+    margin: 10px 0;
+    padding: 15px;
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+
+.portfolio-card .problem-card-meta {
+    display: block;
+    margin-top: 6px;
 }
 
 .container {

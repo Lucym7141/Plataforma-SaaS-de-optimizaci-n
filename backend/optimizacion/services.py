@@ -45,6 +45,52 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
             ).order_by("id")
         )
 
+        ejecucion.modelo_snapshot = {
+            "nombre": problema.nombre,
+            "descripcion": problema.descripcion,
+            "tipo_objetivo": problema.tipo_objetivo,
+            "variables": [
+                {
+                    "nombre": variable.nombre,
+                    "tipo": variable.tipo,
+                    "limite_inferior": (
+                        str(variable.limite_inferior)
+                        if variable.limite_inferior is not None
+                        else None
+                    ),
+                    "limite_superior": (
+                        str(variable.limite_superior)
+                        if variable.limite_superior is not None
+                        else None
+                    ),
+                }
+                for variable in variables_db
+            ],
+            "terminos_objetivo": [
+                {
+                    "variable_nombre": termino.variable.nombre,
+                    "coeficiente": str(termino.coeficiente),
+                }
+                for termino in terminos_objetivo
+            ],
+            "restricciones": [
+                {
+                    "nombre": restriccion.nombre,
+                    "operador": restriccion.operador,
+                    "lado_derecho": str(restriccion.lado_derecho),
+                    "terminos": [
+                        {
+                            "variable_nombre": termino.variable.nombre,
+                            "coeficiente": str(termino.coeficiente),
+                        }
+                        for termino in restriccion.terminos.all()
+                    ],
+                }
+                for restriccion in restricciones_db
+            ],
+        }
+        ejecucion.save(update_fields=["modelo_snapshot"])
+
         if not variables_db:
             raise ValueError(
                 "El problema debe tener al menos una variable."
@@ -250,6 +296,7 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
                     ValorSolucion(
                         ejecucion=ejecucion,
                         variable=variable_db,
+                        variable_nombre=variable_db.nombre,
                         valor=Decimal(str(valor_variable)),
                     )
                 )

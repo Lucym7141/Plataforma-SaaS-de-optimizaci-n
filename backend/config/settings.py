@@ -106,12 +106,37 @@ OPTIMIZER_MAX_ABS_VALUE = int(
 OPTIMIZER_TIME_LIMIT_SECONDS = int(
     os.environ.get("OPTIMIZER_TIME_LIMIT_SECONDS", "30")
 )
+MAX_PORTFOLIO_ASSETS = int(os.environ.get("MAX_PORTFOLIO_ASSETS", "100"))
+PUBLIC_APP_URL = os.environ.get(
+    "PUBLIC_APP_URL",
+    "http://127.0.0.1:8000" if DEBUG else "",
+).rstrip("/")
+parsed_public_url = urlparse(PUBLIC_APP_URL)
+if not DEBUG and (
+    parsed_public_url.scheme != "https"
+    or not parsed_public_url.netloc
+    or parsed_public_url.username
+    or parsed_public_url.password
+    or parsed_public_url.fragment
+):
+    raise ImproperlyConfigured(
+        "PUBLIC_APP_URL debe ser una URL HTTPS pública válida en producción."
+    )
+if not 2 <= MAX_PORTFOLIO_ASSETS <= 100:
+    raise ImproperlyConfigured("MAX_PORTFOLIO_ASSETS debe estar entre 2 y 100.")
 AUTH_SIGNUP_LIMIT = os.environ.get("AUTH_SIGNUP_LIMIT", "5/h")
 AUTH_LOGIN_LIMIT = os.environ.get("AUTH_LOGIN_LIMIT", "10/m")
+AUTH_PASSWORD_RESET_LIMIT = os.environ.get("AUTH_PASSWORD_RESET_LIMIT", "5/h")
+AUTH_VERIFY_LIMIT = os.environ.get("AUTH_VERIFY_LIMIT", "5/h")
 OPTIMIZER_SOLVE_LIMIT = os.environ.get("OPTIMIZER_SOLVE_LIMIT", "5/m")
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1_048_576
 AUTH_SIGNUP_LIMIT = validate_rate("AUTH_SIGNUP_LIMIT", AUTH_SIGNUP_LIMIT)
 AUTH_LOGIN_LIMIT = validate_rate("AUTH_LOGIN_LIMIT", AUTH_LOGIN_LIMIT)
+AUTH_PASSWORD_RESET_LIMIT = validate_rate(
+    "AUTH_PASSWORD_RESET_LIMIT",
+    AUTH_PASSWORD_RESET_LIMIT,
+)
+AUTH_VERIFY_LIMIT = validate_rate("AUTH_VERIFY_LIMIT", AUTH_VERIFY_LIMIT)
 OPTIMIZER_SOLVE_LIMIT = validate_rate(
     "OPTIMIZER_SOLVE_LIMIT",
     OPTIMIZER_SOLVE_LIMIT,
@@ -136,6 +161,42 @@ if not 1 <= OPTIMIZER_TIME_LIMIT_SECONDS <= 300:
     raise ImproperlyConfigured(
         "OPTIMIZER_TIME_LIMIT_SECONDS debe estar entre 1 y 300."
     )
+
+DEFAULT_FROM_EMAIL = os.environ.get(
+    "DEFAULT_FROM_EMAIL",
+    "OptiPortfolio <no-reply@localhost>" if DEBUG else "",
+)
+if DEBUG:
+    mailer_settings = {
+        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+        "FROM_EMAIL": DEFAULT_FROM_EMAIL,
+    }
+else:
+    email_host = os.environ.get("EMAIL_HOST")
+    email_host_user = os.environ.get("EMAIL_HOST_USER", "")
+    email_host_password = os.environ.get("EMAIL_HOST_PASSWORD", "")
+    email_port = int(os.environ.get("EMAIL_PORT", "587"))
+    email_use_tls = env_bool("EMAIL_USE_TLS", True)
+    email_use_ssl = env_bool("EMAIL_USE_SSL", False)
+    if not all((email_host, DEFAULT_FROM_EMAIL)):
+        raise ImproperlyConfigured(
+            "Configura EMAIL_HOST y DEFAULT_FROM_EMAIL en producción."
+        )
+    if email_use_tls and email_use_ssl:
+        raise ImproperlyConfigured(
+            "EMAIL_USE_TLS y EMAIL_USE_SSL no pueden activarse a la vez."
+        )
+    mailer_settings = {
+        "BACKEND": "django.core.mail.backends.smtp.EmailBackend",
+        "HOST": email_host,
+        "PORT": email_port,
+        "USERNAME": email_host_user,
+        "PASSWORD": email_host_password,
+        "USE_TLS": email_use_tls,
+        "USE_SSL": email_use_ssl,
+        "FROM_EMAIL": DEFAULT_FROM_EMAIL,
+    }
+MAILERS = {"default": mailer_settings}
 
 
 # Application definition
@@ -164,6 +225,8 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         'signup': AUTH_SIGNUP_LIMIT,
         'login': AUTH_LOGIN_LIMIT,
+        'password_reset': AUTH_PASSWORD_RESET_LIMIT,
+        'verify': AUTH_VERIFY_LIMIT,
         'solve': OPTIMIZER_SOLVE_LIMIT,
     },
 }
@@ -285,13 +348,3 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
-
-
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
-
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
-    },
-}

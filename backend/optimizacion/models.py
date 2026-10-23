@@ -26,6 +26,7 @@ class ProblemaOptimizacion(models.Model):
         default=TipoObjetivo.MAXIMIZAR,
     )
     activo = models.BooleanField(default=True)
+    archivado = models.BooleanField(default=False)
     creado_en = models.DateTimeField(auto_now_add=True)
     actualizado_en = models.DateTimeField(auto_now=True)
 
@@ -255,6 +256,7 @@ class EjecucionOptimizacion(models.Model):
     )
     mensaje = models.TextField(blank=True)
     detalles = models.JSONField(default=dict, blank=True)
+    modelo_snapshot = models.JSONField(default=dict, blank=True)
     iniciada_en = models.DateTimeField(auto_now_add=True)
     finalizada_en = models.DateTimeField(null=True, blank=True)
 
@@ -275,9 +277,12 @@ class ValorSolucion(models.Model):
     )
     variable = models.ForeignKey(
         VariableDecision,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="valores_solucion",
     )
+    variable_nombre = models.CharField(max_length=100, default="")
     valor = models.DecimalField(
         max_digits=24,
         decimal_places=6,
@@ -303,7 +308,67 @@ class ValorSolucion(models.Model):
             )
 
     def __str__(self):
-        return f"{self.variable.nombre} = {self.valor}"
+        return f"{self.variable_nombre} = {self.valor}"
+
+
+class VerificacionCorreo(models.Model):
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="verificacion_correo",
+    )
+    verificado_en = models.DateTimeField(null=True, blank=True)
+
+
+class OptimizacionPortafolio(models.Model):
+    propietario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="optimizaciones_portafolio",
+    )
+    nombre = models.CharField(max_length=150)
+    activos = models.JSONField()
+    categorias = models.JSONField(default=list, blank=True)
+    rendimientos_esperados = models.JSONField()
+    covarianza = models.JSONField()
+    aversion_riesgo = models.DecimalField(max_digits=12, decimal_places=6)
+    periodos_por_anio = models.PositiveSmallIntegerField(default=1)
+    pesos_minimos = models.JSONField(default=list, blank=True)
+    pesos_maximos = models.JSONField(default=list, blank=True)
+    limites_categoria = models.JSONField(default=dict, blank=True)
+    escenarios_estres = models.JSONField(default=dict, blank=True)
+    archivado = models.BooleanField(default=False)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-actualizado_en"]
+
+    def __str__(self):
+        return self.nombre
+
+
+class EjecucionPortafolio(models.Model):
+    optimizacion = models.ForeignKey(
+        OptimizacionPortafolio,
+        on_delete=models.CASCADE,
+        related_name="ejecuciones",
+    )
+    modelo_snapshot = models.JSONField(default=dict)
+    estado = models.CharField(max_length=20, default="OPT")
+    rendimientos_portafolio = models.FloatField()
+    varianza_portafolio = models.FloatField()
+    volatilidad_portafolio = models.FloatField()
+    utilidad_riesgo = models.FloatField()
+    ponderaciones = models.JSONField()
+    contribuciones_riesgo = models.JSONField(default=list)
+    rendimiento_anualizado = models.FloatField(null=True, blank=True)
+    volatilidad_anualizada = models.FloatField(null=True, blank=True)
+    resultados_estres = models.JSONField(default=dict)
+    creada_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-creada_en"]
 
 
 class RateLimitCounter(models.Model):
