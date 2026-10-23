@@ -1,0 +1,114 @@
+
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OptiPortfolio AI | Optimización</title>
+    <link rel="stylesheet" href="{% static 'styles.css' %}">
+    <script src="{% static 'app.js' %}" defer></script>
+</head>
+<body>
+    <header class="topbar">
+        <a class="brand" href="/">
+            <span class="brand-icon">O</span>
+            <span>OptiPortfolio <strong>AI</strong></span>
+        </a>
+        <span class="status"><span class="status-dot"></span> Plataforma de optimización</span>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <p class="eyebrow">OPTIMIZACIÓN MATEMÁTICA</p>
+            <h1>Convierte tus problemas<br>en <span>soluciones óptimas.</span></h1>
+            <p class="hero-description">
+                Consulta tus modelos, revisa sus restricciones y ejecuta el solucionador
+                para encontrar la mejor solución posible.
+            </p>
+        </section>
+
+        <section class="workspace">
+            <aside class="panel problems-panel">
+                <div class="panel-heading">
+                    <div>
+                        <p class="section-label">TU ESPACIO DE TRABAJO</p>
+                        <h2>Problemas</h2>
+                    </div>
+                    <button id="refresh-button" class="icon-button" type="button" title="Actualizar lista" aria-label="Actualizar lista">↻</button>
+                </div>
+                <p class="muted">Selecciona un problema para ver sus detalles.</p>
+                <div id="problems-list" class="problems-list">
+                    <p class="muted">Cargando problemas...</p>
+                </div>
+            </aside>
+
+            <section class="panel details-panel">
+                <div id="empty-state" class="empty-state">
+                    <div class="empty-icon">⌘</div>
+                    <h2>Empieza seleccionando un problema</h2>
+                    <p>Aquí aparecerán las variables, la función objetivo y las restricciones del modelo.</p>
+                </div>
+
+                <div id="problem-content" hidden>
+                    <div class="panel-heading detail-heading">
+                        <div>
+                            <p class="section-label">MODELO SELECCIONADO</p>
+                            <h2 id="problem-title">Problema</h2>
+                        </div>
+                        <span id="problem-type" class="type-badge">Maximizar</span>
+                    </div>
+
+                    <p id="problem-description" class="muted description"></p>
+
+                    <div class="model-section">
+                        <h3><span class="number">01</span> Variables de decisión</h3>
+                        <div id="variables-list" class="variable-list"></div>
+                    </div>
+
+                    <div class="model-section">
+                        <h3><span class="number">02</span> Función objetivo</h3>
+                        <div id="objective-formula" class="formula">—</div>
+                    </div>
+
+                    <div class="model-section">
+                        <h3><span class="number">03</span> Restricciones</h3>
+                        <div id="constraints-list" class="constraints-list"></div>
+                    </div>
+
+                    <div class="solve-area">
+                        <div>
+                            <h3>¿Listo para optimizar?</h3>
+                            <p class="muted">El solucionador calculará los valores óptimos de las variables.</p>
+                        </div>
+                        <button id="solve-button" class="primary-button" type="button">
+                            <span>▶</span> Resolver problema
+                        </button>
+                    </div>
+
+                    <div id="error-message" class="message error-message" role="alert" hidden></div>
+
+                    <section id="results-section" class="results-section" hidden>
+                        <div class="results-heading">
+                            <div>
+                                <p class="section-label">RESULTADO DEL SOLUCIONADOR</p>
+                                <h2>Resultado de la optimización</h2>
+                            </div>
+                            <span id="result-status" class="result-badge">—</span>
+                        </div>
+                        <div class="objective-result">
+                            <span class="muted">Valor de la función objetivo</span>
+                            <strong id="result-objective">—</strong>
+                        </div>
+                        <h3>Valores de las variables</h3>
+                        <div id="solution-values" class="solution-values"></div>
+                        <p id="result-message" class="muted result-message"></p>
+                    </section>
+                </div>
+            </section>
+        </section>
+
+        <p class="footer-note">OptiPortfolio AI · Herramienta académica de optimización matemática</p>
+    </main>
+</body>
+</html>

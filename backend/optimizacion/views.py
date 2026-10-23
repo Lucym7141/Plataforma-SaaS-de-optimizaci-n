@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.shortcuts import render
 
 from .models import ProblemaOptimizacion, EjecucionOptimizacion
 from .serializers import (
@@ -61,3 +62,6 @@ def resolver_problema_api(request, problema_id):
         serializer.data,
         status=status.HTTP_200_OK,
     )
+
+def inicio(request):
+    return render(request, "index.html")
