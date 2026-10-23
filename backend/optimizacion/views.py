@@ -8,18 +8,45 @@ from django.shortcuts import render
 from .models import ProblemaOptimizacion, EjecucionOptimizacion
 from .serializers import (
     ProblemaOptimizacionSerializer,
+    ProblemaOptimizacionCrearSerializer,
     EjecucionOptimizacionSerializer,
 )
 from .services import resolver_problema
 
 
-@api_view(["GET"])
+
+@api_view(["GET", "POST"])
 def listar_problemas(request):
-    """Devuelve la lista de problemas de optimización."""
+    """Lista los problemas activos o crea un problema nuevo."""
+
+    if request.method == "POST":
+        serializer = ProblemaOptimizacionCrearSerializer(
+            data=request.data
+        )
+
+        if serializer.is_valid():
+            problema = serializer.save()
+
+            respuesta = ProblemaOptimizacionSerializer(problema)
+
+            return Response(
+                respuesta.data,
+                status=status.HTTP_201_CREATED,
+            )
+
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     problemas = ProblemaOptimizacion.objects.filter(activo=True)
-    serializer = ProblemaOptimizacionSerializer(problemas, many=True)
+    serializer = ProblemaOptimizacionSerializer(
+        problemas,
+        many=True,
+    )
 
     return Response(serializer.data)
+
 
 
 @api_view(["GET"])

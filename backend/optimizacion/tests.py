@@ -141,3 +141,106 @@ class ApiOptimizacionTests(TestCase):
 
         self.assertEqual(respuesta.status_code, 400)
         self.assertIn("error", respuesta.data)
+
+
+    def test_crear_problema_completo(self):
+        datos = {
+            "nombre": "Nuevo problema",
+            "descripcion": "Prueba de creación desde la API",
+            "tipo_objetivo": "MAX",
+            "variables": [
+                {
+                    "nombre": "x",
+                    "tipo": "CONT",
+                    "limite_inferior": "0",
+                },
+                {
+                    "nombre": "y",
+                    "tipo": "CONT",
+                    "limite_inferior": "0",
+                },
+            ],
+            "terminos_objetivo": [
+                {
+                    "variable_nombre": "x",
+                    "coeficiente": "3",
+                },
+                {
+                    "variable_nombre": "y",
+                    "coeficiente": "5",
+                },
+            ],
+            "restricciones": [
+                {
+                    "nombre": "capacidad",
+                    "operador": "LE",
+                    "lado_derecho": "12",
+                    "terminos": [
+                        {
+                            "variable_nombre": "x",
+                            "coeficiente": "2",
+                        },
+                        {
+                            "variable_nombre": "y",
+                            "coeficiente": "3",
+                        },
+                    ],
+                },
+            ],
+        }
+
+        respuesta = self.client.post(
+            "/api/problemas/",
+            datos,
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertEqual(respuesta.data["nombre"], "Nuevo problema")
+        self.assertEqual(len(respuesta.data["variables"]), 2)
+        self.assertEqual(
+            len(respuesta.data["terminos_objetivo"]),
+            2,
+        )
+        self.assertEqual(len(respuesta.data["restricciones"]), 1)
+
+        problema_creado = ProblemaOptimizacion.objects.get(
+            nombre="Nuevo problema"
+        )
+        self.assertEqual(problema_creado.variables.count(), 2)
+        self.assertEqual(problema_creado.terminos_objetivo.count(), 2)
+        self.assertEqual(problema_creado.restricciones.count(), 1)
+
+    def test_rechazar_variable_inexistente(self):
+        datos = {
+            "nombre": "Problema inválido",
+            "tipo_objetivo": "MAX",
+            "variables": [
+                {
+                    "nombre": "x",
+                    "tipo": "CONT",
+                    "limite_inferior": "0",
+                },
+            ],
+            "terminos_objetivo": [
+                {
+                    "variable_nombre": "z",
+                    "coeficiente": "5",
+                },
+            ],
+            "restricciones": [],
+        }
+
+        respuesta = self.client.post(
+            "/api/problemas/",
+            datos,
+            format="json",
+        )
+
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertEqual(
+            ProblemaOptimizacion.objects.filter(
+                nombre="Problema inválido"
+            ).count(),
+            0,
+        )
