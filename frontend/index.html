@@ -5,83 +5,543 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OptiPortfolio AI | Optimización</title>
+    <title>Vértice | Optimización financiera</title>
+    <link rel="icon" type="image/png" href="{% static 'brand-icon.png' %}">
     <link rel="stylesheet" href="{% static 'styles.css' %}">
+    <script type="module" src="{% static 'react-build/react-app.js' %}"></script>
+    <script src="{% static 'vendor/chart.umd.min.js' %}" defer></script>
     <script src="{% static 'app.js' %}" defer></script>
 </head>
 <body>
     <header class="topbar">
-        <a class="brand" href="/">
-            <span class="brand-icon">O</span>
-            <span>OptiPortfolio <strong>AI</strong></span>
+        <a class="brand" href="/" aria-label="Vértice">
+            <img class="brand-wordmark" src="{% static 'brand-logo.png' %}" alt="Vértice Financial Optimization">
         </a>
-        <div class="account-controls" hidden>
-            <span id="account-name" class="status"></span>
-            <button id="export-account-button" class="secondary-button" type="button">Exportar mis datos</button>
-            <button id="change-password-button" class="secondary-button" type="button">Cambiar contraseña</button>
-            <button id="delete-account-button" class="secondary-button danger-button" type="button">Eliminar cuenta</button>
-            <button id="logout-button" class="secondary-button" type="button">Cerrar sesión</button>
+        <div class="topbar-meta">
+            <a id="premium-link" class="premium-link" href="/planes/" target="_blank" rel="opener">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.6l-5 2.8 1.1-5.6L4 8.9l5.6-.7L12 3Z"/><path d="M5 21h14"/></svg>
+                Hazte premium
+            </a>
+            <div class="notification-menu">
+                <button id="notification-toggle" class="header-icon-button notification-trigger" type="button" aria-expanded="false" aria-controls="notifications-panel" aria-label="Notificaciones">
+                    <svg class="notification-bell" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M10 21h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                    <span id="notification-count" class="notification-count" hidden></span>
+                </button>
+                <section id="notifications-panel" class="notifications-panel" aria-labelledby="notifications-title" hidden>
+                    <div class="notifications-heading">
+                        <div>
+                            <h2 id="notifications-title">Notificaciones</h2>
+                            <p id="notifications-summary" class="muted">Actividad reciente de tu espacio</p>
+                        </div>
+                        <button id="notifications-mark-read" class="notifications-mark-read" type="button" disabled>Marcar leídas</button>
+                    </div>
+                    <div id="notifications-list" class="notifications-list" aria-live="polite">
+                        <p class="notification-empty">Tus actualizaciones recientes aparecerán aquí.</p>
+                    </div>
+                </section>
+            </div>
+            <button id="theme-toggle" class="header-icon-button theme-toggle" type="button" aria-pressed="false" aria-label="Tema claro. Activar modo oscuro." title="Tema claro. Activar modo oscuro.">
+                <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.8"/>
+                    <path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                </svg>
+                <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.6 8.6 0 1 0 20.2 15.1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <span id="status-label" class="status"><span class="status-dot"></span> Acceso seguro</span>
         </div>
-        <span id="status-label" class="status"><span class="status-dot"></span> Acceso seguro</span>
     </header>
 
     <main class="container">
-        <section id="auth-panel" class="panel auth-panel" hidden>
-            <p class="section-label">ACCESO SEGURO</p>
-            <h1 id="auth-title">Inicia sesión</h1>
-            <p class="muted">Tus problemas y resultados solo estarán disponibles para tu cuenta.</p>
-            <div class="auth-tabs" role="tablist" aria-label="Acceso">
-                <button id="login-tab" class="auth-tab selected" type="button" role="tab" aria-selected="true">Iniciar sesión</button>
-                <button id="register-tab" class="auth-tab" type="button" role="tab" aria-selected="false">Crear cuenta</button>
+        <section id="auth-panel" class="auth-panel" hidden aria-labelledby="auth-title">
+            <aside class="auth-visual" aria-label="Presentación de Vértice">
+                <div class="auth-visual-glow" aria-hidden="true"></div>
+                <div class="auth-visual-content">
+                    <p class="auth-eyebrow"><span class="auth-eyebrow-dot" aria-hidden="true"></span> VÉRTICE · FINANCIAL OPTIMIZATION</p>
+                    <p class="auth-visual-title">Decisiones financieras con más perspectiva.</p>
+                    <p class="auth-visual-copy">Modela problemas de optimización y analiza tus portafolios en un espacio privado, claro y trazable.</p>
+                    <ul class="auth-feature-list">
+                        <li>
+                            <span class="auth-feature-index" aria-hidden="true">01</span>
+                            <span><strong>Modelos comprensibles</strong>Formula, resuelve y revisa cada decisión.</span>
+                        </li>
+                        <li>
+                            <span class="auth-feature-index" aria-hidden="true">02</span>
+                            <span><strong>Análisis con contexto</strong>Compara riesgo, rendimiento y escenarios.</span>
+                        </li>
+                        <li>
+                            <span class="auth-feature-index" aria-hidden="true">03</span>
+                            <span><strong>Control de tu cuenta</strong>Tus datos permanecen privados y exportables.</span>
+                        </li>
+                    </ul>
+                </div>
+                <div class="auth-art" aria-hidden="true">
+                    <div class="auth-art-halo"></div>
+                    <div class="auth-art-orbit auth-art-orbit--outer"></div>
+                    <div class="auth-art-orbit auth-art-orbit--inner"></div>
+                    <div class="auth-art-card">
+                        <div class="auth-art-card-head"><span></span><span></span><span></span></div>
+                        <div class="auth-art-chart">
+                            <span></span><span></span><span></span><span></span><span></span>
+                        </div>
+                        <div class="auth-art-metric">
+                            <span>Volatilidad anual</span>
+                            <strong>12.4%</strong>
+                        </div>
+                    </div>
+                    <span class="auth-art-chip auth-art-chip--top">Riesgo controlado</span>
+                    <span class="auth-art-chip auth-art-chip--bottom">+18.2% rendimiento</span>
+                </div>
+                <p class="auth-visual-foot"><span class="status-dot" aria-hidden="true"></span> Sesión cifrada y acceso privado</p>
+            </aside>
+
+            <div class="auth-card">
+                <div class="auth-card-heading">
+                    <p class="section-label">ACCESO SEGURO</p>
+                    <h1 id="auth-title">Inicia sesión</h1>
+                    <p id="auth-subtitle" class="muted">Tus problemas y resultados solo estarán disponibles para tu cuenta.</p>
+                </div>
+
+                <div class="auth-tabs" role="tablist" aria-label="Acceso" aria-orientation="horizontal">
+                    <button id="login-tab" class="auth-tab selected" type="button" role="tab" aria-selected="true" aria-controls="login-form" tabindex="0">Iniciar sesión</button>
+                    <button id="register-tab" class="auth-tab" type="button" role="tab" aria-selected="false" aria-controls="register-form" tabindex="-1">Crear cuenta</button>
+                </div>
+
+                <p id="auth-message" class="message" role="alert" aria-live="assertive" aria-atomic="true" hidden></p>
+
+                <div class="auth-stage">
+                    <form id="login-form" class="auth-form" role="tabpanel" aria-labelledby="login-tab">
+                        <div class="auth-field">
+                            <label for="login-username">Usuario</label>
+                            <div class="auth-input-wrap">
+                                <span class="auth-input-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c.6-3.2 3-5 6.5-5s5.9 1.8 6.5 5"/></svg>
+                                </span>
+                                <input id="login-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Tu nombre de usuario" required>
+                            </div>
+                        </div>
+                        <div class="auth-field">
+                            <label for="login-password">Contraseña</label>
+                            <div class="auth-input-wrap auth-input-wrap--password">
+                                <span class="auth-input-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg>
+                                </span>
+                                <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Tu contraseña" required>
+                                <button class="auth-password-toggle" type="button" data-password-toggle="login-password" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+                            </div>
+                        </div>
+                        <button class="primary-button auth-submit" type="submit">Iniciar sesión</button>
+                    </form>
+
+                    <form id="register-form" class="auth-form" role="tabpanel" aria-labelledby="register-tab" hidden>
+                        <div class="auth-field">
+                            <label for="register-username">Usuario</label>
+                            <div class="auth-input-wrap">
+                                <span class="auth-input-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 19c.6-3.2 3-5 6.5-5s5.9 1.8 6.5 5"/></svg>
+                                </span>
+                                <input id="register-username" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Elige un nombre de usuario" maxlength="150" required>
+                            </div>
+                        </div>
+                        <div class="auth-field">
+                            <label for="register-email">Correo</label>
+                            <div class="auth-input-wrap">
+                                <span class="auth-input-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></svg>
+                                </span>
+                                <input id="register-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="tu@correo.com" required>
+                            </div>
+                        </div>
+                        <div class="auth-field">
+                            <label for="register-password">Contraseña</label>
+                            <div class="auth-input-wrap auth-input-wrap--password">
+                                <span class="auth-input-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg>
+                                </span>
+                                <input id="register-password" name="password" type="password" autocomplete="new-password" placeholder="Crea una contraseña segura" aria-describedby="register-password-hint" required>
+                                <button class="auth-password-toggle" type="button" data-password-toggle="register-password" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+                            </div>
+                            <p id="register-password-hint" class="auth-hint">Debe cumplir las reglas de seguridad configuradas.</p>
+                        </div>
+                        <button class="primary-button auth-submit" type="submit">Crear cuenta</button>
+                    </form>
+                </div>
+
+                <div id="auth-help-actions" class="auth-help-actions">
+                    <button id="resend-verification-button" class="auth-link" type="button" aria-expanded="false" aria-controls="resend-verification-form">Reenviar verificación</button>
+                    <span class="auth-help-separator" aria-hidden="true">·</span>
+                    <button id="password-reset-button" class="auth-link" type="button" aria-expanded="false" aria-controls="password-reset-form">Olvidé mi contraseña</button>
+                </div>
+
+                <form id="resend-verification-form" class="auth-form auth-aux-form" hidden>
+                    <div class="auth-aux-heading">
+                        <strong>Reenviar verificación</strong>
+                        <span>Si tu cuenta sigue pendiente, te enviaremos otro enlace.</span>
+                    </div>
+                    <div class="auth-field">
+                        <label for="resend-email">Correo de la cuenta</label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></svg>
+                            </span>
+                            <input id="resend-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="tu@correo.com" required>
+                        </div>
+                    </div>
+                    <button class="secondary-button auth-aux-submit" type="submit">Enviar enlace de verificación</button>
+                </form>
+
+                <form id="password-reset-form" class="auth-form auth-aux-form" hidden>
+                    <div class="auth-aux-heading">
+                        <strong>Recuperar acceso</strong>
+                        <span>Te enviaremos instrucciones si la cuenta existe.</span>
+                    </div>
+                    <div class="auth-field">
+                        <label for="reset-email">Correo de la cuenta</label>
+                        <div class="auth-input-wrap">
+                            <span class="auth-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4.5 7.5 7.5 5.5 7.5-5.5"/></svg>
+                            </span>
+                            <input id="reset-email" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" placeholder="tu@correo.com" required>
+                        </div>
+                    </div>
+                    <button class="secondary-button auth-aux-submit" type="submit">Enviar enlace de recuperación</button>
+                </form>
+
+                <form id="password-confirm-form" class="auth-form auth-aux-form" hidden>
+                    <div class="auth-aux-heading">
+                        <strong>Nueva contraseña</strong>
+                        <span>Define una contraseña nueva para recuperar el acceso.</span>
+                    </div>
+                    <div class="auth-field">
+                        <label for="new-password">Nueva contraseña</label>
+                        <div class="auth-input-wrap auth-input-wrap--password">
+                            <span class="auth-input-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2.5"/><path d="M8 10V7.5a4 4 0 0 1 8 0V10"/></svg>
+                            </span>
+                            <input id="new-password" name="password" type="password" autocomplete="new-password" placeholder="Tu nueva contraseña" required>
+                            <button class="auth-password-toggle" type="button" data-password-toggle="new-password" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+                        </div>
+                    </div>
+                    <button class="primary-button auth-submit" type="submit">Guardar contraseña nueva</button>
+                </form>
+
+                <p class="auth-security-note">
+                    <span class="auth-security-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3 5 6v5.5c0 4.2 2.8 7.5 7 9.5 4.2-2 7-5.3 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                    </span>
+                    Acceso protegido con sesión segura y verificación por correo.
+                </p>
             </div>
-            <form id="login-form" class="auth-form">
-                <label for="login-username">Usuario</label>
-                <input id="login-username" name="username" autocomplete="username" required>
-                <label for="login-password">Contraseña</label>
-                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
-                <button class="primary-button" type="submit">Iniciar sesión</button>
-            </form>
-            <form id="register-form" class="auth-form" hidden>
-                <label for="register-username">Usuario</label>
-                <input id="register-username" name="username" autocomplete="username" maxlength="150" required>
-                <label for="register-email">Correo</label>
-                <input id="register-email" name="email" type="email" autocomplete="email" required>
-                <label for="register-password">Contraseña</label>
-                <input id="register-password" name="password" type="password" autocomplete="new-password" required>
-                <p class="muted">La contraseña debe cumplir las reglas de seguridad configuradas.</p>
-                <button class="primary-button" type="submit">Crear cuenta</button>
-            </form>
-            <button id="resend-verification-button" class="text-button" type="button">Reenviar verificación de correo</button>
-            <form id="resend-verification-form" class="auth-form" hidden>
-                <label for="resend-email">Correo de la cuenta</label>
-                <input id="resend-email" name="email" type="email" autocomplete="email" required>
-                <button class="secondary-button" type="submit">Enviar enlace de verificación</button>
-            </form>
-            <button id="password-reset-button" class="text-button" type="button">Olvidé mi contraseña</button>
-            <form id="password-reset-form" class="auth-form" hidden>
-                <label for="reset-email">Correo de la cuenta</label>
-                <input id="reset-email" name="email" type="email" autocomplete="email" required>
-                <button class="secondary-button" type="submit">Enviar enlace de recuperación</button>
-            </form>
-            <form id="password-confirm-form" class="auth-form" hidden>
-                <label for="new-password">Nueva contraseña</label>
-                <input id="new-password" name="password" type="password" autocomplete="new-password" required>
-                <button class="primary-button" type="submit">Guardar contraseña nueva</button>
-            </form>
-            <p id="auth-message" class="message error-message" role="alert" hidden></p>
         </section>
+    </main>
 
-        <div id="app-content" hidden>
-        <section class="hero">
-            <p class="eyebrow">OPTIMIZACIÓN MATEMÁTICA</p>
-            <h1>Convierte tus problemas<br>en <span>soluciones óptimas.</span></h1>
-            <p class="hero-description">
-                Consulta tus modelos, revisa sus restricciones y ejecuta el solucionador
-                para encontrar la mejor solución posible.
-            </p>
+    <div id="app-content" class="app-layout" hidden>
+        <aside id="app-sidebar" class="app-sidebar" aria-label="Navegación principal">
+            <a class="sidebar-brand" href="#dashboard" aria-label="Vértice, ir al escritorio">
+                <img class="sidebar-brand-logo" src="{% static 'brand-logo.png' %}" alt="Vértice Financial Optimization">
+            </a>
+            <p class="sidebar-section-label">ESPACIO DE TRABAJO</p>
+            <nav class="sidebar-nav" aria-label="Secciones">
+                <a class="sidebar-link is-active" href="#dashboard" aria-current="page">
+                    <span class="sidebar-link-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+                    </span>
+                    <span>Escritorio</span>
+                </a>
+                <a class="sidebar-link" href="#portfolio-panel">
+                    <span class="sidebar-link-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5h16M6.5 16V9.5m5 6.5V4.5m5 11.5v-4m-12-5.5 5-4 5 5 5-4"/></svg>
+                    </span>
+                    <span>Análisis</span>
+                </a>
+                <a class="sidebar-link" href="#problem-workspace">
+                    <span class="sidebar-link-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M8 4.5H6a2 2 0 0 0-2 2v2m12-4h2a2 2 0 0 1 2 2v2m-16 7v2a2 2 0 0 0 2 2h2m12-4v2a2 2 0 0 1-2 2h-2M8 12h8m-4-4v8"/></svg>
+                    </span>
+                    <span>Modelos</span>
+                </a>
+                <button class="sidebar-link sidebar-profile-trigger" type="button" data-sidebar-profile aria-haspopup="dialog" aria-controls="profile-drawer">
+                    <span class="sidebar-link-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0M19 4.5v3m-1.5-1.5h3"/></svg>
+                    </span>
+                    <span>Mi perfil</span>
+                </button>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="sidebar-help-card">
+                    <span class="sidebar-help-icon" aria-hidden="true">✦</span>
+                    <strong>Optimiza con claridad</strong>
+                    <span>Modela, analiza y compara tus decisiones.</span>
+                </div>
+                <div class="sidebar-account">
+                    <span id="sidebar-user-avatar" class="sidebar-user-avatar" aria-hidden="true">U</span>
+                    <img id="sidebar-user-photo" class="sidebar-user-avatar" alt="" hidden>
+                    <span class="sidebar-account-copy">
+                        <strong id="sidebar-user-name">Usuario</strong>
+                        <span>Cuenta personal</span>
+                    </span>
+                </div>
+            </div>
+        </aside>
+        <button id="sidebar-backdrop" class="sidebar-backdrop" type="button" aria-label="Cerrar menú de navegación" hidden></button>
+        <button id="profile-backdrop" class="profile-backdrop" type="button" aria-label="Cerrar perfil" hidden></button>
+        <section id="profile-drawer" class="profile-drawer" role="dialog" aria-modal="true" aria-labelledby="profile-drawer-title" aria-hidden="true" hidden>
+            <div class="profile-drawer-heading">
+                <div>
+                    <p class="section-label">TU CUENTA</p>
+                    <h2 id="profile-drawer-title">Mi perfil</h2>
+                    <p class="muted">Personaliza la información que aparece en tu espacio.</p>
+                </div>
+                <button id="profile-drawer-close" class="icon-button profile-close-button" type="button" aria-label="Cerrar perfil">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+            </div>
+            <div id="profile-preview-root" class="profile-preview" aria-label="Vista previa del perfil"></div>
+            <form id="profile-form" class="profile-form">
+                <div class="profile-form-fields">
+                    <div class="profile-field-heading">
+                        <label for="profile-display-name">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+                            Nombre visible
+                        </label>
+                        <output id="profile-name-count" for="profile-display-name">0/80</output>
+                    </div>
+                    <input id="profile-display-name" name="nombre_visible" maxlength="80" autocomplete="name" placeholder="¿Cómo te llamamos?">
+                    <div class="profile-field-heading">
+                        <label for="profile-description">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 5.5h14v10H10l-5 4v-14Z"/><path d="M8 9h8m-8 3h5"/></svg>
+                            Descripción breve
+                        </label>
+                        <output id="profile-description-count" for="profile-description">0/240</output>
+                    </div>
+                    <textarea id="profile-description" name="descripcion" maxlength="240" rows="3" placeholder="Cuéntanos un poco sobre ti"></textarea>
+                    <label for="profile-photo-input" class="profile-photo-label">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m5 17 5-4 3 2 3-3 3 3"/></svg>
+                        Foto de perfil (JPEG, PNG o WebP; máximo 768 KiB)
+                    </label>
+                    <input id="profile-photo-input" name="foto" type="file" accept="image/jpeg,image/png,image/webp" aria-describedby="profile-photo-hint">
+                    <p id="profile-photo-hint" class="profile-photo-hint">Elige una imagen cuadrada para que se vea mejor en tu espacio.</p>
+                </div>
+                <div class="profile-form-actions">
+                    <button class="primary-button" type="submit">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 4h12l3 3v13H4V4h1Z"/><path d="M8 4v6h8V4m-8 16v-6h8v6"/></svg>
+                        Guardar perfil
+                    </button>
+                    <button id="profile-reset" class="secondary-button" type="button" disabled>
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7L4 8.5"/><path d="M4 4v4.5h4.5"/></svg>
+                        Descartar cambios
+                    </button>
+                    <button id="profile-remove-photo" class="secondary-button" type="button">
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8.5 8.5 7 7m0-7-7 7"/></svg>
+                        Quitar foto
+                    </button>
+                </div>
+                <p id="profile-message" class="message" role="status" aria-live="polite" hidden></p>
+            </form>
+            <section class="account-settings" aria-labelledby="account-settings-title">
+                <div class="account-settings-heading">
+                    <div>
+                        <p class="section-label">SEGURIDAD Y DATOS</p>
+                        <h3 id="account-settings-title">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.2 2.8 7.5 7 9.5 4.2-2 7-5.3 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                            Mi cuenta
+                        </h3>
+                    </div>
+                    <span id="account-name" class="account-identity"></span>
+                </div>
+                <div class="account-actions">
+                    <button id="export-account-button" class="account-action-button" type="button">
+                        <span class="account-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg></span>
+                        <span><strong>Exportar mis datos</strong><small>Descarga una copia de tu información</small></span>
+                    </button>
+                    <button id="change-password-button" class="account-action-button" type="button">
+                        <span class="account-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 4v3"/></svg></span>
+                        <span><strong>Cambiar contraseña</strong><small>Actualiza la seguridad de tu cuenta</small></span>
+                    </button>
+                    <button id="delete-account-button" class="account-action-button account-action-danger" type="button">
+                        <span class="account-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16m-10 4v7m4-7v7M6 7l1 14h10l1-14M9 7V4h6v3"/></svg></span>
+                        <span><strong>Eliminar cuenta</strong><small>Elimina la cuenta y sus datos</small></span>
+                    </button>
+                    <button id="logout-button" class="account-action-button" type="button">
+                        <span class="account-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M10 17v3H4V4h6v3m3-1 6 6-6 6m6-6H9"/></svg></span>
+                        <span><strong>Cerrar sesión</strong><small>Salir de Vértice en este dispositivo</small></span>
+                    </button>
+                </div>
+            </section>
         </section>
-
-        <section class="panel portfolio-panel">
+        <div class="app-main">
+            <div class="app-mobile-toolbar">
+                <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="app-sidebar" aria-label="Abrir navegación">
+                    <span aria-hidden="true">☰</span>
+                    <span>Menú</span>
+                </button>
+                <span class="app-mobile-title">Vértice</span>
+            </div>
+        <section id="dashboard" class="dashboard" data-app-page="dashboard">
+            <div class="dashboard-heading">
+                <div class="dashboard-welcome">
+                    <p class="dashboard-eyebrow">VÉRTICE · ESPACIO DE TRABAJO</p>
+                    <h1 id="dashboard-greeting">Tu escritorio financiero</h1>
+                    <p class="dashboard-welcome-copy">Un resumen claro de tus modelos y portafolios para seguir tomando decisiones con perspectiva.</p>
+                    <div class="dashboard-welcome-meta">
+                        <span class="dashboard-live"><span class="dashboard-live-dot"></span> Datos de tu cuenta</span>
+                        <span id="dashboard-date"></span>
+                    </div>
+                </div>
+                <button class="dashboard-user-card" type="button" data-sidebar-profile aria-haspopup="dialog" aria-controls="profile-drawer" aria-label="Abrir Mi perfil">
+                    <span id="dashboard-user-avatar" class="dashboard-user-avatar" aria-hidden="true">U</span>
+                    <img id="dashboard-user-photo" class="dashboard-user-avatar dashboard-user-photo" alt="Foto de perfil" hidden>
+                    <span class="dashboard-user-details">
+                        <strong id="dashboard-user-name">Usuario</strong>
+                        <span class="dashboard-user-label">Mi perfil</span>
+                        <span id="dashboard-user-bio" class="dashboard-user-bio" hidden></span>
+                    </span>
+                    <span class="dashboard-user-mark" aria-hidden="true">⌄</span>
+                </button>
+            </div>
+            <nav class="dashboard-shortcuts" aria-label="Accesos del dashboard">
+                <a class="dashboard-shortcut" href="#portfolio-panel">
+                    <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19.5h16M6.5 16V9.5m5 6.5V4.5m5 11.5v-4m-12-5.5 5-4 5 5 5-4"/></svg>
+                    Análisis de portafolio
+                </a>
+                <a class="primary-button dashboard-create-link" href="#problem-workspace">
+                    <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                    Crear modelo
+                </a>
+                <a class="dashboard-shortcut" href="#problem-workspace">
+                    <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></svg>
+                    Asistente IA
+                </a>
+                <button id="dashboard-refresh" class="secondary-button dashboard-refresh" type="button" aria-label="Actualizar resumen y gráficos">
+                    <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5"/><path d="M5.5 9a7 7 0 0 1 12-2L20 12M4 12l2.5 5a7 7 0 0 0 12-2"/></svg>
+                    Actualizar
+                </button>
+            </nav>
+            <div id="dashboard-status" class="dashboard-status" role="status" aria-live="polite" hidden>
+                <span id="dashboard-status-text"></span>
+                <button id="dashboard-retry" class="secondary-button" type="button" hidden>Reintentar</button>
+            </div>
+            <section class="dashboard-section dashboard-summary-section" aria-labelledby="dashboard-summary-title">
+                <div class="dashboard-section-heading">
+                    <div>
+                        <p class="section-label">VISTA GENERAL</p>
+                        <h2 id="dashboard-summary-title">Resumen de tu espacio</h2>
+                    </div>
+                    <span class="muted">Los elementos archivados se cuentan por separado</span>
+                </div>
+            <div class="kpi-grid">
+                <article class="kpi-card">
+                    <span class="kpi-icon kpi-icon-problems" aria-hidden="true">⌘</span>
+                    <span class="kpi-label">Problemas activos</span>
+                    <strong id="kpi-problemas" class="kpi-value">—</strong>
+                    <span class="kpi-caption">Modelos listos para optimizar</span>
+                </article>
+                <article class="kpi-card">
+                    <span class="kpi-icon kpi-icon-portfolios" aria-hidden="true">◈</span>
+                    <span class="kpi-label">Portafolios activos</span>
+                    <strong id="kpi-portafolios" class="kpi-value">—</strong>
+                    <span class="kpi-caption">Estrategias en seguimiento</span>
+                </article>
+                <article class="kpi-card">
+                    <span class="kpi-icon kpi-icon-archived" aria-hidden="true">↗</span>
+                    <span class="kpi-label">Problemas archivados</span>
+                    <strong id="kpi-problemas-archivados" class="kpi-value">—</strong>
+                    <span class="kpi-caption">Modelos guardados</span>
+                </article>
+                <article class="kpi-card">
+                    <span class="kpi-icon kpi-icon-history" aria-hidden="true">◷</span>
+                    <span class="kpi-label">Portafolios archivados</span>
+                    <strong id="kpi-portafolios-archivados" class="kpi-value">—</strong>
+                    <span class="kpi-caption">Estrategias anteriores</span>
+                </article>
+                <article class="kpi-card">
+                    <span class="kpi-icon kpi-icon-assets" aria-hidden="true">⌁</span>
+                    <span class="kpi-label">Activos en portafolios</span>
+                    <strong id="kpi-activos-totales" class="kpi-value">—</strong>
+                    <span class="kpi-caption">Suma de activos en portafolios activos</span>
+                </article>
+            </div>
+            <div class="chart-grid">
+                <article class="chart-card">
+                    <h3>Problemas activos por objetivo</h3>
+                    <div class="chart-canvas">
+                        <canvas id="chart-problemas" role="img" aria-label="Todos los problemas activos agrupados por objetivo"></canvas>
+                        <p id="chart-problemas-empty" class="chart-empty" hidden>Sin problemas activos para graficar.</p>
+                    </div>
+                </article>
+                <article class="chart-card">
+                    <h3>Portafolios activos por cantidad de activos</h3>
+                    <div class="chart-canvas">
+                        <canvas id="chart-portafolios" role="img" aria-label="Distribución de todos los portafolios activos según su cantidad de activos"></canvas>
+                        <p id="chart-portafolios-empty" class="chart-empty" hidden>Sin portafolios activos para graficar.</p>
+                    </div>
+                </article>
+            </div>
+            </section>
+        </section>
+        <section class="app-page-heading" data-app-page="models" aria-labelledby="models-page-title">
+            <p class="section-label">MODELOS DE OPTIMIZACIÓN</p>
+            <h1 id="models-page-title">Tus modelos y asistente IA</h1>
+            <p class="muted">Crea modelos desde cero o genera un borrador con el asistente; revísalo antes de guardarlo.</p>
+        </section>
+        <section class="dashboard-section dashboard-recent-section" data-app-page="models" aria-labelledby="dashboard-recent-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="section-label">RETOMA TU TRABAJO</p>
+                    <h2 id="dashboard-recent-title">Actividad reciente</h2>
+                </div>
+                <span class="muted">Elementos activos actualizados recientemente</span>
+            </div>
+            <div class="activity-grid">
+                <article class="chart-card activity-card">
+                    <div class="card-heading">
+                        <h3>Modelos de optimización</h3>
+                        <a class="dashboard-view-all" href="#problem-workspace">Ver modelos</a>
+                    </div>
+                    <div id="dashboard-problems" class="activity-list" aria-live="polite"></div>
+                </article>
+                <article class="chart-card activity-card">
+                    <div class="card-heading">
+                        <h3>Portafolios</h3>
+                        <a class="dashboard-view-all" href="#portfolio-panel">Ver portafolios</a>
+                    </div>
+                    <div id="dashboard-portfolios" class="activity-list" aria-live="polite"></div>
+                </article>
+            </div>
+        </section>
+        <section class="dashboard-section dashboard-history-section" data-app-page="models" aria-labelledby="dashboard-history-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="section-label">SEGUIMIENTO</p>
+                    <h2 id="dashboard-history-title">Historial reciente</h2>
+                </div>
+                <span class="muted">Ordenado por última modificación</span>
+            </div>
+            <div class="chart-card dashboard-history-card">
+                <div class="table-scroll">
+                    <table class="dashboard-history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Tipo</th>
+                                <th scope="col">Modelo o portafolio</th>
+                                <th scope="col">Última modificación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-activity-history" aria-live="polite"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        <section class="app-page-heading" data-app-page="analysis" aria-labelledby="analysis-page-title">
+            <p class="section-label">ANÁLISIS MEDIA-VARIANZA</p>
+            <h1 id="analysis-page-title">Análisis de portafolio</h1>
+            <p class="muted">Explora la relación entre rendimiento esperado y riesgo con los supuestos que definas.</p>
+        </section>
+        <section id="portfolio-panel" class="panel portfolio-panel" data-app-page="analysis">
             <div class="panel-heading">
                 <div>
                     <p class="section-label">ANÁLISIS MEDIA-VARIANZA</p>
@@ -142,7 +602,25 @@
             <div id="portfolio-list" class="problems-list"></div>
             <section id="portfolio-result" class="results-section" hidden>
                 <h3>Resultado del portafolio</h3>
+                <div class="report-actions" aria-label="Exportar resultado del portafolio">
+                    <button class="secondary-button" type="button" data-report-format="pdf" data-report-target="portfolio">Descargar PDF</button>
+                    <button class="secondary-button" type="button" data-report-format="xlsx" data-report-target="portfolio">Descargar Excel</button>
+                </div>
+                <p class="message" data-report-message="portfolio" role="status" hidden></p>
                 <div id="portfolio-result-values" class="solution-values"></div>
+                <section id="portfolio-comparison" class="portfolio-comparison" hidden>
+                    <h4>Escenario actual vs. óptimo</h4>
+                    <p class="muted">
+                        Ingresa la distribución actual de tu cartera. La comparación usa los mismos
+                        rendimientos y covarianzas del modelo; son estimaciones, no una predicción.
+                    </p>
+                    <form id="portfolio-comparison-form" class="portfolio-comparison-form">
+                        <div id="portfolio-comparison-weights" class="portfolio-comparison-weights"></div>
+                        <p id="portfolio-comparison-message" class="message" role="status" hidden></p>
+                        <button class="secondary-button" type="submit">Comparar escenarios</button>
+                    </form>
+                    <div id="portfolio-comparison-results" class="table-scroll" hidden></div>
+                </section>
             </section>
             <section id="frontier-section" class="results-section" hidden>
                 <h3>Frontera eficiente</h3>
@@ -155,7 +633,7 @@
             </section>
         </section>
 
-        <section class="workspace">
+        <section id="problem-workspace" class="workspace" data-app-page="models">
             <aside class="panel problems-panel">
                 <div class="panel-heading">
                     <div>
@@ -174,6 +652,7 @@
             </aside>
 
             <section class="panel details-panel">
+                <div id="problem-author-root"></div>
                 <div id="empty-state" class="empty-state">
                     <div class="empty-icon">⌘</div>
                     <h2>Empieza seleccionando un problema</h2>
@@ -192,6 +671,7 @@
                         <button id="edit-problem-button" class="secondary-button" type="button">Editar nombre y descripción</button>
                         <button id="duplicate-problem-button" class="secondary-button" type="button">Duplicar</button>
                         <button id="archive-problem-button" class="secondary-button" type="button">Archivar</button>
+                        <button id="delete-problem-button" class="danger-button" type="button">Eliminar permanentemente</button>
                         <button id="problem-history-button" class="secondary-button" type="button">Historial</button>
                     </div>
 
@@ -239,6 +719,11 @@
                         <h3>Valores de las variables</h3>
                         <div id="solution-values" class="solution-values"></div>
                         <p id="result-message" class="muted result-message"></p>
+                        <div class="report-actions" aria-label="Exportar resultado de optimización">
+                            <button class="secondary-button" type="button" data-report-format="pdf" data-report-target="problem">Descargar PDF</button>
+                            <button class="secondary-button" type="button" data-report-format="xlsx" data-report-target="problem">Descargar Excel</button>
+                        </div>
+                        <p class="message" data-report-message="problem" role="status" hidden></p>
                     </section>
                     <section id="problem-history" class="results-section" hidden>
                         <h3>Historial de ejecuciones</h3>
@@ -248,9 +733,13 @@
             </section>
         </section>
 
-        <p class="footer-note">OptiPortfolio AI · Herramienta académica de optimización matemática</p>
+        <footer class="app-footer" data-app-page="dashboard">
+            <img class="app-footer-logo" src="{% static 'brand-logo.png' %}" alt="Vértice">
+            <span class="app-footer-description">Optimización financiera</span>
+            <span class="app-footer-copyright">© <span id="footer-year"></span> Vértice</span>
+        </footer>
         </div>
-    </main>
+    </div>
     <dialog id="delete-account-dialog" class="account-dialog">
         <form id="delete-account-form" class="auth-form">
             <h2>Eliminar cuenta y datos</h2>

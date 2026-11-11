@@ -1,0 +1,69 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Conoce los planes informativos de Vértice.">
+    <title>Planes y precios | Vértice</title>
+    <link rel="icon" type="image/png" href="{% static 'brand-icon.png' %}">
+    <link rel="stylesheet" href="{% static 'styles.css' %}">
+    <script src="{% static 'plans.js' %}" defer></script>
+</head>
+<body class="public-plans-page">
+    <div class="plans-layout">
+        <aside class="plans-sidebar" aria-label="Navegación de planes">
+            <a class="plans-sidebar-brand" href="/" data-return-to-workspace aria-label="Volver al escritorio de Vértice">
+                <img src="{% static 'brand-logo.png' %}" alt="Vértice Financial Optimization">
+            </a>
+            <p class="plans-sidebar-label">CUENTA</p>
+            <a class="plans-sidebar-link" href="/" data-return-to-workspace>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg>
+                Escritorio
+            </a>
+            <a class="plans-sidebar-link is-active" href="/planes/" aria-current="page">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.6l-5 2.8 1.1-5.6L4 8.9l5.6-.7L12 3Z"/><path d="M5 21h14"/></svg>
+                Planes y precios
+            </a>
+            <div class="plans-sidebar-footer">
+                <span class="plans-sidebar-footer-icon" aria-hidden="true">✦</span>
+                <strong>Vértice</strong>
+                <span>Decisiones con perspectiva.</span>
+            </div>
+        </aside>
+        <main class="plans-main-column">
+            <header class="plans-topbar">
+                <div>
+                    <p class="plans-topbar-eyebrow">VÉRTICE · SUSCRIPCIONES</p>
+                    <h1>Planes y precios</h1>
+                </div>
+                <a class="plans-back-link" href="/" data-return-to-workspace>
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M19 12H5m7 7-7-7 7-7"/></svg>
+                    Volver al escritorio
+                </a>
+            </header>
+            <div class="public-plans-main">
+                <section class="pricing-section" aria-labelledby="pricing-title">
+                    <div class="pricing-heading">
+                        <p class="section-label">ELIGE TU SIGUIENTE PASO</p>
+                        <h2 id="pricing-title">Planes de suscripción de Vértice</h2>
+                        <p class="muted">Opciones informativas para acompañar tus análisis y decisiones financieras.</p>
+                    </div>
+                    <div id="subscription-plans" class="pricing-grid" aria-live="polite">
+                        <p class="plans-loading" role="status">Cargando planes…</p>
+                    </div>
+                    <p id="pricing-message" class="message" role="status" aria-live="polite" hidden></p>
+                    <p class="plans-disclaimer">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg>
+                        Página informativa: no procesa pagos, activa suscripciones ni aplica los límites mostrados a las cuentas.
+                    </p>
+                </section>
+                <footer class="plans-footer">
+                    <span>© <span id="plans-year"></span> Vértice</span>
+                    <a href="/" data-return-to-workspace>Volver a Vértice</a>
+                </footer>
+            </div>
+        </main>
+    </div>
+</body>
+</html>

@@ -61,6 +61,7 @@ cover/
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+backend/media/
 
 # Flask stuff:
 instance/
@@ -154,7 +155,9 @@ activemq-data/
 .envrc
 .venv
 .opencode/
+.copilot-azure/
 node_modules/
+frontend/react-build/
 playwright-report/
 test-results/
 env/

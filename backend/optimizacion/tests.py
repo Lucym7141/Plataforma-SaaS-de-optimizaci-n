@@ -1,26 +1,39 @@
 
 import json
+import io
+import tempfile
+from datetime import timedelta
 from unittest.mock import patch
 
 import pulp
+from PIL import Image
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ImproperlyConfigured
 from django.test import Client, TestCase
 from django.test.utils import override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from django.utils.http import urlsafe_base64_encode
 from django.utils.encoding import force_bytes
+from openpyxl import load_workbook
 from rest_framework.test import APIClient
 from django.core import signing
 
+from config.subscription_plans import load_subscription_plans
 from .serializers import ProblemaOptimizacionCrearSerializer
 from .services import resolver_problema
+from .ai_modeling import (
+    AzureOpenAIConfigurationError,
+    generar_modelo,
+)
 from .portfolio import (
     calcular_frontera_eficiente,
     optimizar_media_varianza,
 )
 from .models import (
     ProblemaOptimizacion,
+    EjecucionOptimizacion,
     OptimizacionPortafolio,
     EjecucionPortafolio,
     VariableDecision,
@@ -28,6 +41,142 @@ from .models import (
     Restriccion,
     TerminoRestriccion,
 )
+
+
+class AzureOpenAIServiceTests(TestCase):
+    @override_settings(
+        AZURE_OPENAI_ENDPOINT=(
+            "https://test.services.ai.azure.com/openai/v1/responses"
+        ),
+        AZURE_OPENAI_DEPLOYMENT="gpt-4.1-mini",
+        AZURE_OPENAI_API_VERSION="",
+    )
+    def test_responses_api_uses_foundry_endpoint_and_does_not_store_response(self):
+        body = json.dumps({
+            "output_text": '{"nombre":"modelo"}'
+        }).encode("utf-8")
+        with (
+            patch(
+                "optimizacion.ai_modeling._access_token",
+                return_value="token-test",
+            ) as token_mock,
+            patch(
+                "optimizacion.ai_modeling.urlopen",
+                return_value=io.BytesIO(body),
+            ) as urlopen_mock,
+        ):
+            result = generar_modelo("Descripción privada del modelo")
+
+        self.assertEqual(result, '{"nombre":"modelo"}')
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://test.services.ai.azure.com/openai/v1/responses",
+        )
+        self.assertEqual(request.get_header("Authorization"), "Bearer token-test")
+        token_mock.assert_called_once_with("https://ai.azure.com/.default")
+        sent = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(sent["model"], "gpt-4.1-mini")
+        self.assertEqual(
+            sent["input"][1]["content"],
+            "Descripción privada del modelo",
+        )
+        self.assertEqual(sent["text"]["format"]["type"], "json_object")
+        self.assertFalse(sent["store"])
+        self.assertEqual(urlopen_mock.call_args.kwargs["timeout"], 30)
+
+    @override_settings(
+        AZURE_OPENAI_ENDPOINT="https://test.openai.azure.com",
+        AZURE_OPENAI_DEPLOYMENT="unit-test",
+        AZURE_OPENAI_API_VERSION="2024-10-21",
+    )
+    def test_request_uses_managed_identity_and_configured_deployment(self):
+        body = json.dumps({
+            "choices": [{
+                "message": {"content": '{"nombre":"modelo"}'}
+            }]
+        }).encode("utf-8")
+        with (
+            patch("optimizacion.ai_modeling._access_token", return_value="token-test"),
+            patch(
+                "optimizacion.ai_modeling.urlopen",
+                return_value=io.BytesIO(body),
+            ) as urlopen_mock,
+        ):
+            result = generar_modelo("Descripción privada del modelo")
+
+        self.assertEqual(result, '{"nombre":"modelo"}')
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "https://test.openai.azure.com/openai/deployments/"
+            "unit-test/chat/completions?api-version=2024-10-21",
+        )
+        self.assertEqual(request.get_header("Authorization"), "Bearer token-test")
+        sent = json.loads(request.data.decode("utf-8"))
+        self.assertEqual(sent["messages"][1]["content"], "Descripción privada del modelo")
+        self.assertEqual(urlopen_mock.call_args.kwargs["timeout"], 30)
+
+    @override_settings(
+        AZURE_OPENAI_ENDPOINT="http://not-secure.example",
+        AZURE_OPENAI_DEPLOYMENT="unit-test",
+        AZURE_OPENAI_API_VERSION="2024-10-21",
+    )
+    def test_service_rejects_non_https_endpoint(self):
+        with self.assertRaises(AzureOpenAIConfigurationError):
+            generar_modelo("Descripción suficientemente larga para probar")
+
+    @override_settings(
+        AZURE_OPENAI_ENDPOINT="https://test.openai.azure.com/unexpected/path",
+        AZURE_OPENAI_DEPLOYMENT="unit-test",
+        AZURE_OPENAI_API_VERSION="2024-10-21",
+    )
+    def test_service_rejects_unsupported_endpoint_path(self):
+        with self.assertRaises(AzureOpenAIConfigurationError):
+            generar_modelo("Descripción suficientemente larga para probar")
+
+
+class SubscriptionPlansTests(TestCase):
+    def test_planes_se_muestran_con_limites_y_precios_configurados(self):
+        response = APIClient().get("/api/planes/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [plan["name"] for plan in response.data],
+            ["Inicial", "Profesional", "Profesional Pro"],
+        )
+        self.assertEqual(response.data[0]["price"], 0)
+        self.assertEqual(response.data[0]["currency"], "USD")
+        self.assertEqual(response.data[1]["price"], 3.95)
+        self.assertEqual(response.data[1]["currency"], "USD")
+        self.assertEqual(response.data[2]["price"], 10.5)
+        self.assertEqual(response.data[2]["currency"], "USD")
+        self.assertTrue(all(plan["interval"] == "monthly" for plan in response.data))
+        self.assertIn("Hasta 3 modelos de optimización", response.data[0]["features"])
+        self.assertIn("Hasta 50 activos por portafolio", response.data[1]["features"])
+        self.assertIn("Hasta 100 activos por portafolio", response.data[2]["features"])
+
+    def test_configuracion_de_planes_rechaza_ids_duplicados(self):
+        plan = load_subscription_plans("")[0]
+        with self.assertRaises(ImproperlyConfigured):
+            load_subscription_plans(json.dumps([plan, plan]))
+
+    def test_configuracion_de_planes_acepta_precio_y_moneda(self):
+        plans = [{
+            "id": "personal",
+            "name": "Personal",
+            "description": "Uso individual.",
+            "price": 19.99,
+            "currency": "USD",
+            "interval": "monthly",
+            "features": ["Modelos"],
+            "featured": False,
+        }]
+
+        self.assertEqual(
+            load_subscription_plans(json.dumps(plans)),
+            plans,
+        )
 
 
 class ApiOptimizacionTests(TestCase):
@@ -151,10 +300,19 @@ class ApiOptimizacionTests(TestCase):
         resolver = self.client.post(
             f"/api/problemas/{problema_ajeno.pk}/resolver/"
         )
+        eliminar = self.client.delete(
+            f"/api/problemas/{problema_ajeno.pk}/"
+        )
 
         self.assertEqual(len(lista.data), 1)
         self.assertEqual(detalle.status_code, 404)
         self.assertEqual(resolver.status_code, 404)
+        self.assertEqual(eliminar.status_code, 404)
+        self.assertTrue(
+            ProblemaOptimizacion.objects.filter(
+                pk=problema_ajeno.pk
+            ).exists()
+        )
 
     def test_detalle_problema(self):
         respuesta = self.client.get(
@@ -169,6 +327,27 @@ class ApiOptimizacionTests(TestCase):
         self.assertEqual(
             respuesta.data["restricciones"].__len__(),
             3,
+        )
+
+    def test_eliminar_problema_borra_su_historial(self):
+        solved = self.client.post(
+            f"/api/problemas/{self.problema.pk}/resolver/"
+        )
+        self.assertEqual(solved.status_code, 200)
+        execution_id = solved.data["id"]
+
+        response = self.client.delete(
+            f"/api/problemas/{self.problema.pk}/"
+        )
+
+        self.assertEqual(response.status_code, 204)
+        self.assertFalse(
+            ProblemaOptimizacion.objects.filter(
+                pk=self.problema.pk
+            ).exists()
+        )
+        self.assertFalse(
+            EjecucionOptimizacion.objects.filter(pk=execution_id).exists()
         )
 
     def test_editar_archivar_duplicar_y_conservar_historial(self):
@@ -329,6 +508,121 @@ class ApiOptimizacionTests(TestCase):
         self.assertEqual(problema_creado.terminos_objetivo.count(), 2)
         self.assertEqual(problema_creado.restricciones.count(), 1)
 
+    def test_generar_borrador_con_ia_valida_y_no_guarda_el_modelo(self):
+        modelo = {
+            "nombre": "Plan generado",
+            "descripcion": "Borrador desde texto.",
+            "tipo_objetivo": "MAX",
+            "variables": [
+                {
+                    "nombre": "x",
+                    "descripcion": "Unidades de producto",
+                    "unidad": "unidades",
+                    "tipo": "ENT",
+                    "limite_inferior": "0",
+                    "limite_superior": "10",
+                },
+                {
+                    "nombre": "y",
+                    "descripcion": "",
+                    "unidad": "",
+                    "tipo": "CONT",
+                    "limite_inferior": "0",
+                    "limite_superior": None,
+                },
+            ],
+            "terminos_objetivo": [
+                {"variable_nombre": "x", "coeficiente": "3"},
+                {"variable_nombre": "y", "coeficiente": "5"},
+            ],
+            "restricciones": [
+                {
+                    "nombre": "capacidad",
+                    "operador": "LE",
+                    "lado_derecho": "12",
+                    "terminos": [
+                        {"variable_nombre": "x", "coeficiente": "2"},
+                        {"variable_nombre": "y", "coeficiente": "3"},
+                    ],
+                },
+            ],
+        }
+        with patch(
+            "optimizacion.views.generar_modelo",
+            return_value=json.dumps(modelo),
+        ) as generate:
+            response = self.client.post(
+                "/api/problemas/generar/",
+                {
+                    "texto": (
+                        "Maximiza utilidad con dos variables y una restricción "
+                        "de capacidad de doce unidades."
+                    )
+                },
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["nombre"], "Plan generado")
+        self.assertEqual(len(response.data["variables"]), 2)
+        self.assertEqual(len(response.data["restricciones"]), 1)
+        self.assertEqual(
+            ProblemaOptimizacion.objects.filter(
+                propietario=self.user,
+            ).count(),
+            1,
+        )
+        generate.assert_called_once()
+
+    def test_generar_borrador_con_ia_rechaza_entrada_corta(self):
+        with patch("optimizacion.views.generar_modelo") as generate:
+            response = self.client.post(
+                "/api/problemas/generar/",
+                {"texto": "Muy corto"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 400)
+        generate.assert_not_called()
+
+    def test_generar_borrador_con_ia_rechaza_salida_invalida(self):
+        with patch(
+            "optimizacion.views.generar_modelo",
+            return_value=json.dumps({
+                "nombre": "Modelo inválido",
+                "tipo_objetivo": "MAX",
+                "variables": [{"nombre": "x", "tipo": "CONT"}],
+                "terminos_objetivo": [
+                    {"variable_nombre": "variable_inexistente", "coeficiente": "1"}
+                ],
+                "restricciones": [],
+            }),
+        ):
+            response = self.client.post(
+                "/api/problemas/generar/",
+                {"texto": "Maximiza una función con una variable y restricciones."},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("no cumple las validaciones", response.data["detail"])
+
+    def test_generar_borrador_con_ia_informa_si_azure_no_esta_configurado(self):
+        with patch(
+            "optimizacion.views.generar_modelo",
+            side_effect=AzureOpenAIConfigurationError(
+                "Configura Azure OpenAI."
+            ),
+        ):
+            response = self.client.post(
+                "/api/problemas/generar/",
+                {"texto": "Maximiza utilidad con dos variables de decisión."},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.data["detail"], "Configura Azure OpenAI.")
+
     def test_rechazar_variable_inexistente(self):
         datos = {
             "nombre": "Problema inválido",
@@ -408,6 +702,59 @@ class ApiOptimizacionTests(TestCase):
 
         self.assertEqual(ejecucion.estado, "ERR")
         self.assertIn("límite de variables", ejecucion.mensaje)
+
+    def test_descarga_reporte_pdf_y_excel_de_una_ejecucion(self):
+        solved = self.client.post(
+            f"/api/problemas/{self.problema.pk}/resolver/"
+        )
+        self.assertEqual(solved.status_code, 200)
+        execution_id = solved.data["id"]
+        report_url = (
+            f"/api/problemas/{self.problema.pk}/ejecuciones/"
+            f"{execution_id}/reporte"
+        )
+
+        pdf = self.client.get(f"{report_url}/pdf/")
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf["Content-Type"], "application/pdf")
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+        self.assertIn("attachment;", pdf["Content-Disposition"])
+
+        excel = self.client.get(f"{report_url}/xlsx/")
+        self.assertEqual(excel.status_code, 200)
+        self.assertIn(
+            "spreadsheetml.sheet",
+            excel["Content-Type"],
+        )
+        workbook = load_workbook(io.BytesIO(excel.content), read_only=True)
+        self.assertEqual(workbook.sheetnames[0], "Resumen")
+        values = list(workbook["Resumen"].values)
+        self.assertIn(
+            ("Modelo", self.problema.nombre),
+            values,
+        )
+        self.assertEqual(
+            self.client.get(f"{report_url}/csv/").status_code,
+            400,
+        )
+
+    def test_reporte_de_ejecucion_no_es_visible_a_otra_cuenta(self):
+        solved = self.client.post(
+            f"/api/problemas/{self.problema.pk}/resolver/"
+        )
+        other_user = get_user_model().objects.create_user(
+            username="reporte-ajeno",
+            password="Fuerte-contraseña-739!",
+        )
+        other_client = APIClient()
+        other_client.force_authenticate(user=other_user)
+
+        response = other_client.get(
+            f"/api/problemas/{self.problema.pk}/ejecuciones/"
+            f"{solved.data['id']}/reporte/pdf/"
+        )
+
+        self.assertEqual(response.status_code, 404)
 
 
 class RegistroUsuarioTests(TestCase):
@@ -620,6 +967,34 @@ class PortfolioOptimizationTests(TestCase):
         self.assertAlmostEqual(resultado["ponderaciones"][0], 0.5, places=4)
         self.assertAlmostEqual(resultado["rendimientos_portafolio"], 0.15, places=5)
         self.assertAlmostEqual(resultado["varianza_portafolio"], 0.0325, places=5)
+
+    def test_descarga_reporte_de_portafolio_con_asignacion_y_metricas(self):
+        created = self.client.post(
+            "/api/portafolios/",
+            self.payload,
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        solved = self.client.post(
+            f"/api/portafolios/{created.data['id']}/resolver/"
+        )
+        self.assertEqual(solved.status_code, 200, solved.data)
+        report_url = (
+            f"/api/portafolios/{created.data['id']}/ejecuciones/"
+            f"{solved.data['id']}/reporte"
+        )
+
+        pdf = self.client.get(f"{report_url}/pdf/")
+        self.assertEqual(pdf.status_code, 200)
+        self.assertTrue(pdf.content.startswith(b"%PDF-"))
+
+        excel = self.client.get(f"{report_url}/xlsx/")
+        self.assertEqual(excel.status_code, 200)
+        workbook = load_workbook(io.BytesIO(excel.content), read_only=True)
+        self.assertIn("Asignación", workbook.sheetnames)
+        self.assertIn("Escenarios de estrés", workbook.sheetnames)
+        allocation_rows = list(workbook["Asignación"].values)
+        self.assertEqual(allocation_rows[2][0], "Bono")
 
     def test_rechaza_covarianza_no_semidefinida_positiva(self):
         invalid = dict(self.payload)
@@ -874,6 +1249,333 @@ class PortfolioOptimizationTests(TestCase):
         response = self.client.get(f"/api/portafolios/{portfolio.pk}/")
 
         self.assertEqual(response.status_code, 404)
+
+
+class ResumenUsuarioTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="resumen-owner",
+            password="Fuerte-contraseña-739!",
+        )
+        self.other_user = get_user_model().objects.create_user(
+            username="resumen-other",
+            password="Fuerte-contraseña-739!",
+        )
+        self.client.force_authenticate(user=self.user)
+
+    def _create_problem(
+        self,
+        nombre,
+        *,
+        owner=None,
+        archived=False,
+        objective="MAX",
+        updated_at=None,
+    ):
+        problem = ProblemaOptimizacion.objects.create(
+            propietario=owner or self.user,
+            nombre=nombre,
+            tipo_objetivo=objective,
+            archivado=archived,
+        )
+        if updated_at is not None:
+            ProblemaOptimizacion.objects.filter(pk=problem.pk).update(
+                actualizado_en=updated_at
+            )
+        return problem
+
+    def _create_portfolio(
+        self,
+        nombre,
+        *,
+        owner=None,
+        archived=False,
+        assets=None,
+        updated_at=None,
+    ):
+        portfolio = OptimizacionPortafolio.objects.create(
+            propietario=owner or self.user,
+            nombre=nombre,
+            activos=assets if assets is not None else ["Activo A", "Activo B"],
+            categorias=["", ""],
+            rendimientos_esperados=["0.10", "0.20"],
+            covarianza=[["0.04", "0"], ["0", "0.09"]],
+            aversion_riesgo="2",
+            archivado=archived,
+        )
+        if updated_at is not None:
+            OptimizacionPortafolio.objects.filter(pk=portfolio.pk).update(
+                actualizado_en=updated_at
+            )
+        return portfolio
+
+    def test_resumen_requiere_autenticacion(self):
+        response = APIClient().get("/api/resumen/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_resumen_cuenta_activos_y_excluye_archivados_de_la_actividad(self):
+        now = timezone.now()
+        self._create_problem(
+            "Problema antiguo",
+            updated_at=now - timedelta(hours=2),
+        )
+        new_problem = self._create_problem(
+            "Problema reciente",
+            objective="MIN",
+            updated_at=now - timedelta(minutes=1),
+        )
+        archived_problem = self._create_problem(
+            "Problema archivado",
+            archived=True,
+            updated_at=now,
+        )
+        self._create_portfolio(
+            "Portafolio antiguo",
+            updated_at=now - timedelta(hours=2),
+        )
+        new_portfolio = self._create_portfolio(
+            "Portafolio reciente",
+            updated_at=now - timedelta(minutes=1),
+        )
+        archived_portfolio = self._create_portfolio(
+            "Portafolio archivado",
+            archived=True,
+            updated_at=now,
+        )
+
+        response = self.client.get("/api/resumen/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["problemas"], 2)
+        self.assertEqual(response.data["problemas_archivados"], 1)
+        self.assertEqual(response.data["portafolios"], 2)
+        self.assertEqual(response.data["portafolios_archivados"], 1)
+
+        recent_problems = response.data["ultimos_problemas"]
+        self.assertEqual(
+            [item["nombre"] for item in recent_problems],
+            ["Problema reciente", "Problema antiguo"],
+        )
+        self.assertEqual(recent_problems[0]["id"], new_problem.pk)
+        self.assertEqual(recent_problems[0]["tipo_objetivo"], "MIN")
+        self.assertNotIn(archived_problem.nombre, [
+            item["nombre"] for item in recent_problems
+        ])
+
+        recent_portfolios = response.data["ultimos_portafolios"]
+        self.assertEqual(
+            [item["nombre"] for item in recent_portfolios],
+            ["Portafolio reciente", "Portafolio antiguo"],
+        )
+        self.assertEqual(recent_portfolios[0]["id"], new_portfolio.pk)
+        self.assertEqual(recent_portfolios[0]["activos"], ["Activo A", "Activo B"])
+        self.assertNotIn(archived_portfolio.nombre, [
+            item["nombre"] for item in recent_portfolios
+        ])
+
+    def test_resumen_analitica_agrega_todos_los_datos_activos(self):
+        for index in range(7):
+            self._create_problem(
+                f"Problema MAX {index}",
+                objective="MAX",
+                updated_at=timezone.now() - timedelta(minutes=index),
+            )
+        for index in range(3):
+            self._create_problem(
+                f"Problema MIN {index}",
+                objective="MIN",
+                updated_at=timezone.now() - timedelta(minutes=index),
+            )
+        self._create_problem("Problema archivado", archived=True)
+
+        self._create_portfolio("Sin activos", assets=[])
+        self._create_portfolio("Un activo", assets=["A"])
+        self._create_portfolio("Tres activos", assets=["A", "B", "C"])
+        self._create_portfolio(
+            "Seis activos",
+            assets=["A", "B", "C", "D", "E", "F"],
+        )
+        self._create_portfolio("Archivado", archived=True, assets=["X"])
+        self._create_portfolio(
+            "Ajeno",
+            owner=self.other_user,
+            assets=["X", "Y"],
+        )
+
+        response = self.client.get("/api/resumen/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["analitica"], {
+            "problemas_por_objetivo": [
+                {"tipo_objetivo": "MAX", "total": 7},
+                {"tipo_objetivo": "MIN", "total": 3},
+            ],
+            "portafolios_por_cantidad_activos": [
+                {"cantidad_activos": "0", "total_portafolios": 1},
+                {"cantidad_activos": "1", "total_portafolios": 1},
+                {"cantidad_activos": "3", "total_portafolios": 1},
+                {"cantidad_activos": "5+", "total_portafolios": 1},
+            ],
+            "activos_totales": 10,
+        })
+
+    def test_resumen_limita_la_actividad_a_los_ultimos_cinco(self):
+        now = timezone.now()
+        for index in range(7):
+            self._create_problem(
+                f"Problema {index}",
+                updated_at=now - timedelta(minutes=index),
+            )
+            self._create_portfolio(
+                f"Portafolio {index}",
+                updated_at=now - timedelta(minutes=index),
+            )
+
+        response = self.client.get("/api/resumen/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["nombre"] for item in response.data["ultimos_problemas"]],
+            [f"Problema {index}" for index in range(5)],
+        )
+        self.assertEqual(
+            [item["nombre"] for item in response.data["ultimos_portafolios"]],
+            [f"Portafolio {index}" for index in range(5)],
+        )
+
+    def test_resumen_solo_incluye_datos_de_la_cuenta_autenticada(self):
+        self._create_problem(
+            "Problema ajeno",
+            owner=self.other_user,
+            updated_at=timezone.now(),
+        )
+        self._create_portfolio(
+            "Portafolio ajeno",
+            owner=self.other_user,
+            updated_at=timezone.now(),
+        )
+
+        response = self.client.get("/api/resumen/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["problemas"], 0)
+        self.assertEqual(response.data["portafolios"], 0)
+        self.assertEqual(response.data["ultimos_problemas"], [])
+        self.assertEqual(response.data["ultimos_portafolios"], [])
+        self.assertEqual(response.data["analitica"], {
+            "problemas_por_objetivo": [],
+            "portafolios_por_cantidad_activos": [],
+            "activos_totales": 0,
+        })
+
+
+class PerfilUsuarioTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            username="profile-owner",
+            password="Profile-Test-Password-928!",
+        )
+        self.other_user = get_user_model().objects.create_user(
+            username="profile-other",
+            password="Profile-Test-Password-928!",
+        )
+        self.client.force_authenticate(user=self.user)
+        media_directory = tempfile.TemporaryDirectory()
+        self.addCleanup(media_directory.cleanup)
+        media_settings = override_settings(MEDIA_ROOT=media_directory.name)
+        media_settings.enable()
+        self.addCleanup(media_settings.disable)
+
+    def _png_upload(self):
+        image_buffer = io.BytesIO()
+        Image.new("RGB", (4, 4), color="purple").save(image_buffer, format="PNG")
+        return SimpleUploadedFile(
+            "avatar.png",
+            image_buffer.getvalue(),
+            content_type="image/png",
+        )
+
+    def test_perfil_actualiza_nombre_y_descripcion(self):
+        response = self.client.patch(
+            "/api/profile/",
+            {"nombre_visible": "  Ada  ", "descripcion": "Inversionista"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["nombre_visible"], "Ada")
+        self.assertEqual(response.data["descripcion"], "Inversionista")
+        self.assertIsNone(response.data["foto_url"])
+
+    def test_foto_se_valida_y_solo_el_usuario_autenticado_puede_verla(self):
+        response = self.client.patch(
+            "/api/profile/",
+            {"foto": self._png_upload()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["foto_url"], "/api/profile/photo/")
+        photo_response = self.client.get(response.data["foto_url"])
+        self.assertEqual(photo_response.status_code, 200)
+        self.assertEqual(photo_response["Content-Type"], "image/png")
+        self.assertEqual(photo_response["Cache-Control"], "private, no-store")
+        photo_response.close()
+
+        other_client = APIClient()
+        other_client.force_authenticate(user=self.other_user)
+        self.assertEqual(other_client.get("/api/profile/photo/").status_code, 404)
+
+    def test_perfil_rechaza_archivos_que_no_son_imagenes(self):
+        response = self.client.patch(
+            "/api/profile/",
+            {
+                "foto": SimpleUploadedFile(
+                    "avatar.png",
+                    b"not an image",
+                    content_type="image/png",
+                )
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("foto", response.data)
+
+    def test_perfil_rechaza_fotos_mayores_al_limite(self):
+        response = self.client.patch(
+            "/api/profile/",
+            {
+                "foto": SimpleUploadedFile(
+                    "large.png",
+                    b"x" * (768 * 1024 + 1),
+                    content_type="image/png",
+                )
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("768 KiB", response.data["foto"])
+
+    def test_borrar_cuenta_elimina_el_archivo_de_perfil(self):
+        response = self.client.patch(
+            "/api/profile/",
+            {"foto": self._png_upload()},
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 200)
+        profile = self.user.perfil
+        photo_storage = profile.foto.storage
+        photo_name = profile.foto.name
+        self.assertTrue(photo_storage.exists(photo_name))
+
+        self.user.delete()
+
+        self.assertFalse(photo_storage.exists(photo_name))
 
 
 class AccountDataTests(TestCase):

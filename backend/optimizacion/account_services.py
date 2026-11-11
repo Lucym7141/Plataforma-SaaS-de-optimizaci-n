@@ -19,7 +19,7 @@ def send_verification_email(user):
     )
     url = f"{settings.PUBLIC_APP_URL}/?{urlencode({'verify': token})}"
     send_mail(
-        "Verifica tu correo de OptiPortfolio",
+        "Verifica tu correo de Vértice",
         (
             f"Hola {user.username},\n\n"
             "Confirma tu correo para activar tu cuenta:\n"
@@ -36,7 +36,7 @@ def send_password_reset_email(user):
     token = default_token_generator.make_token(user)
     url = f"{settings.PUBLIC_APP_URL}/?{urlencode({'reset_uid': uid, 'reset_token': token})}"
     send_mail(
-        "Restablece tu contraseña de OptiPortfolio",
+        "Restablece tu contraseña de Vértice",
         (
             f"Hola {user.username},\n\n"
             "Usa este enlace para elegir una contraseña nueva:\n"

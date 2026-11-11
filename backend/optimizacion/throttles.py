@@ -92,3 +92,7 @@ class ResolverRateThrottle(AtomicRateThrottle, UserRateThrottle):
             f"throttle-{self.scope}",
             identity,
         ).hexdigest()
+
+
+class GenerarModeloRateThrottle(ResolverRateThrottle):
+    scope = "ai_modeling"

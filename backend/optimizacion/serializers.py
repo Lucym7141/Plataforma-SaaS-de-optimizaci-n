@@ -776,4 +776,14 @@ class ProblemaOptimizacionCrearSerializer(serializers.ModelSerializer):
                     ],
                     coeficiente=termino["coeficiente"],
                 )
+
+
+class ProblemaDesdeTextoSerializer(serializers.Serializer):
+    texto = serializers.CharField(
+        min_length=20,
+        max_length=6000,
+        trim_whitespace=True,
+    )
+
+
 from decimal import Decimal

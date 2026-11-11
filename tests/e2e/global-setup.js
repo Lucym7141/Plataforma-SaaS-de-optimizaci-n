@@ -1,5 +1,6 @@
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
+const { getE2EEnvironment } = require("./environment");
 
 module.exports = async () => {
     const windowsPython = "..\\.venv\\Scripts\\python.exe";
@@ -13,7 +14,8 @@ module.exports = async () => {
         {
             cwd: "backend",
             encoding: "utf8",
-            stdio: "inherit"
+            stdio: "inherit",
+            env: getE2EEnvironment()
         }
     );
     if (result.error) throw result.error;
@@ -28,7 +30,7 @@ module.exports = async () => {
             encoding: "utf8",
             stdio: "inherit",
             env: {
-                ...process.env,
+                ...getE2EEnvironment(),
                     E2E_TEST_PASSWORD: process.env.E2E_TEST_PASSWORD ||
                         "Local-E2E-Password-947!"
             }

@@ -1,8 +1,11 @@
 
 import json
 import logging
+import mimetypes
 import smtplib
+import uuid
 
+from PIL import Image, UnidentifiedImageError
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import PasswordChangeForm, SetPasswordForm
@@ -12,10 +15,12 @@ from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core import signing
 from django.db import DatabaseError, connection
+from django.db.models import Count
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from django.http import JsonResponse, StreamingHttpResponse
+from django.http import FileResponse, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils.encoding import force_str
+from django.utils.text import slugify
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.views.decorators.http import require_GET, require_POST
@@ -26,7 +31,7 @@ from rest_framework.decorators import (
     permission_classes,
     throttle_classes,
 )
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import (
@@ -35,10 +40,12 @@ from .models import (
     ProblemaOptimizacion,
     OptimizacionPortafolio,
     VerificacionCorreo,
+    PerfilUsuario,
 )
 from .serializers import (
     ProblemaOptimizacionSerializer,
     ProblemaOptimizacionCrearSerializer,
+    ProblemaDesdeTextoSerializer,
     EjecucionOptimizacionSerializer,
     RegistroUsuarioSerializer,
     DatosPortafolioSerializer,
@@ -57,12 +64,19 @@ from .portfolio import (
 )
 from .portfolio_import import preview_portfolio_csv
 from .services import resolver_problema
+from .reporting import build_portfolio_report, build_problem_report
+from .ai_modeling import (
+    AzureOpenAIConfigurationError,
+    AzureOpenAIServiceError,
+    generar_modelo,
+)
 from .throttles import (
     InicioSesionRateThrottle,
     RestablecerContrasenaRateThrottle,
     RegistroRateThrottle,
     ResolverRateThrottle,
     VerificacionRateThrottle,
+    GenerarModeloRateThrottle,
 )
 
 logger = logging.getLogger(__name__)
@@ -353,6 +367,121 @@ def configuracion_autenticacion(request):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
+def listar_planes(request):
+    return Response(settings.SUBSCRIPTION_PLANS)
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsAuthenticated])
+def perfil_usuario(request):
+    profile, _ = PerfilUsuario.objects.get_or_create(usuario=request.user)
+
+    if request.method == "GET":
+        return Response({
+            "nombre_visible": profile.nombre_visible,
+            "descripcion": profile.descripcion,
+            "foto_url": "/api/profile/photo/" if profile.foto else None,
+        })
+
+    for field, max_length in (("nombre_visible", 80), ("descripcion", 240)):
+        if field not in request.data:
+            continue
+        value = request.data.get(field)
+        if not isinstance(value, str) or len(value) > max_length:
+            return Response(
+                {field: f"El valor debe ser texto de hasta {max_length} caracteres."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        setattr(profile, field, value.strip())
+
+    uploaded_photo = request.FILES.get("foto")
+    previous_photo_name = profile.foto.name if profile.foto else None
+    remove_photo = str(request.data.get("quitar_foto", "")).lower() in {
+        "true",
+        "1",
+        "yes",
+    }
+    if uploaded_photo and remove_photo:
+        return Response(
+            {"detail": "Elige una foto nueva o quita la foto actual, no ambas."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if uploaded_photo:
+        if uploaded_photo.size > 768 * 1024:
+            return Response(
+                {"foto": "La foto no puede superar 768 KiB."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            with Image.open(uploaded_photo) as image:
+                image_format = image.format
+                width, height = image.size
+                if image_format not in {"JPEG", "PNG", "WEBP"}:
+                    return Response(
+                        {"foto": "Usa una imagen JPEG, PNG o WebP."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                if width > 4096 or height > 4096:
+                    return Response(
+                        {"foto": "La imagen no puede superar 4096 píxeles por lado."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+                image.verify()
+        except (UnidentifiedImageError, OSError, SyntaxError, Image.DecompressionBombError):
+            return Response(
+                {"foto": "El archivo no contiene una imagen válida."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        uploaded_photo.seek(0)
+        uploaded_photo.name = f"{uuid.uuid4().hex}.{image_format.lower()}"
+        profile.foto = uploaded_photo
+    elif remove_photo and profile.foto:
+        profile.foto = ""
+
+    profile.save()
+    if previous_photo_name and (
+        remove_photo or (uploaded_photo and profile.foto.name != previous_photo_name)
+    ):
+        try:
+            profile.foto.storage.delete(previous_photo_name)
+        except OSError:
+            logger.exception("No se pudo eliminar la foto de perfil anterior.")
+            return Response(
+                {
+                    "detail": (
+                        "El perfil se actualizó, pero no se pudo eliminar la foto "
+                        "anterior del almacenamiento."
+                    )
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+    return Response({
+        "nombre_visible": profile.nombre_visible,
+        "descripcion": profile.descripcion,
+        "foto_url": "/api/profile/photo/" if profile.foto else None,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def foto_perfil_usuario(request):
+    try:
+        photo = PerfilUsuario.objects.get(usuario=request.user).foto
+        if not photo:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        image_file = photo.storage.open(photo.name, "rb")
+    except PerfilUsuario.DoesNotExist:
+        return Response(status=status.HTTP_404_NOT_FOUND)
+    content_type = mimetypes.guess_type(photo.name)[0] or "application/octet-stream"
+    response = FileResponse(image_file, content_type=content_type)
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def exportar_datos_usuario(request):
     user = request.user
@@ -505,8 +634,71 @@ def listar_problemas(request):
     return Response(serializer.data)
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([GenerarModeloRateThrottle])
+def generar_problema_desde_texto(request):
+    solicitud = ProblemaDesdeTextoSerializer(data=request.data)
+    if not solicitud.is_valid():
+        return Response(
+            solicitud.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
-@api_view(["GET", "PUT"])
+    try:
+        respuesta_ia = generar_modelo(solicitud.validated_data["texto"])
+    except AzureOpenAIConfigurationError as error:
+        return Response(
+            {"detail": str(error)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except AzureOpenAIServiceError:
+        logger.exception("Azure OpenAI no pudo generar un modelo.")
+        return Response(
+            {
+                "detail": (
+                    "No se pudo generar el borrador con Azure OpenAI. "
+                    "Verifica el despliegue y vuelve a intentarlo."
+                )
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    try:
+        modelo = json.loads(respuesta_ia)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Azure OpenAI devolvió JSON inválido para un modelo.")
+        return Response(
+            {
+                "detail": (
+                    "La respuesta de IA no tuvo un formato válido. "
+                    "Reformula la descripción e inténtalo de nuevo."
+                )
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    if not isinstance(modelo, dict):
+        return Response(
+            {"detail": "La IA no devolvió un objeto de modelo válido."},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    validacion = ProblemaOptimizacionCrearSerializer(data=modelo)
+    if not validacion.is_valid():
+        logger.warning("Azure OpenAI devolvió un borrador que no pasó validación.")
+        return Response(
+            {
+                "detail": (
+                    "El borrador de IA no cumple las validaciones del modelo. "
+                    "Aclara variables, objetivo y restricciones, y vuelve a intentarlo."
+                )
+            },
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return Response(validacion.validated_data)
+
+
+@api_view(["GET", "PUT", "DELETE"])
 @permission_classes([IsAuthenticated])
 def detalle_problema(request, problema_id):
     """Devuelve un problema con sus variables y restricciones."""
@@ -515,6 +707,10 @@ def detalle_problema(request, problema_id):
         pk=problema_id,
         propietario=request.user,
     )
+    if request.method == "DELETE":
+        problema.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     if request.method == "PUT":
         if problema.archivado:
             return Response(
@@ -571,6 +767,43 @@ def resolver_problema_api(request, problema_id):
     return Response(
         serializer.data,
         status=status.HTTP_200_OK,
+    )
+
+
+def _execution_report_response(execution, output_format, builder, name):
+    if output_format not in {"pdf", "xlsx"}:
+        return Response(
+            {"detail": "El formato debe ser pdf o xlsx."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    content = builder(execution, output_format)
+    extension = "xlsx" if output_format == "xlsx" else "pdf"
+    content_type = (
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        if extension == "xlsx"
+        else "application/pdf"
+    )
+    filename = f"{slugify(name) or 'reporte'}-{execution.pk}.{extension}"
+    response = HttpResponse(content, content_type=content_type)
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Cache-Control"] = "private, no-store"
+    return response
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reporte_ejecucion_problema(request, problema_id, ejecucion_id, formato):
+    execution = get_object_or_404(
+        EjecucionOptimizacion.objects.select_related("problema"),
+        pk=ejecucion_id,
+        problema_id=problema_id,
+        problema__propietario=request.user,
+    )
+    return _execution_report_response(
+        execution,
+        formato,
+        build_problem_report,
+        execution.modelo_snapshot.get("nombre", execution.problema.nombre),
     )
 
 
@@ -806,6 +1039,23 @@ def historial_portafolio(request, portafolio_id):
     )
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def reporte_ejecucion_portafolio(request, portafolio_id, ejecucion_id, formato):
+    execution = get_object_or_404(
+        EjecucionPortafolio.objects.select_related("optimizacion"),
+        pk=ejecucion_id,
+        optimizacion_id=portafolio_id,
+        optimizacion__propietario=request.user,
+    )
+    return _execution_report_response(
+        execution,
+        formato,
+        build_portfolio_report,
+        execution.modelo_snapshot.get("nombre", execution.optimizacion.nombre),
+    )
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @throttle_classes([ResolverRateThrottle])
@@ -898,6 +1148,80 @@ def restaurar_portafolio(request, portafolio_id):
     return Response(OptimizacionPortafolioSerializer(item).data)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def resumen_usuario(request):
+    """Resumen ligero para el dashboard del usuario autenticado."""
+    user = request.user
+    problemas_activos = ProblemaOptimizacion.objects.filter(
+        propietario=user, archivado=False
+    )
+    problemas_archivados = ProblemaOptimizacion.objects.filter(
+        propietario=user, archivado=True
+    )
+    portafolios_activos = OptimizacionPortafolio.objects.filter(
+        propietario=user, archivado=False
+    )
+    portafolios_archivados = OptimizacionPortafolio.objects.filter(
+        propietario=user, archivado=True
+    )
+    problemas_por_objetivo = list(
+        problemas_activos.values("tipo_objetivo")
+        .annotate(total=Count("pk"))
+        .order_by("tipo_objetivo")
+    )
+    portafolios_por_activos = {}
+    activos_totales = 0
+    for activos in portafolios_activos.values_list("activos", flat=True).iterator():
+        cantidad = len(activos) if isinstance(activos, list) else 0
+        activos_totales += cantidad
+        grupo = str(cantidad) if cantidad < 5 else "5+"
+        portafolios_por_activos[grupo] = portafolios_por_activos.get(grupo, 0) + 1
+
+    return Response({
+        "problemas": problemas_activos.count(),
+        "problemas_archivados": problemas_archivados.count(),
+        "portafolios": portafolios_activos.count(),
+        "portafolios_archivados": portafolios_archivados.count(),
+        "analitica": {
+            "problemas_por_objetivo": problemas_por_objetivo,
+            "portafolios_por_cantidad_activos": [
+                {
+                    "cantidad_activos": grupo,
+                    "total_portafolios": portafolios_por_activos[grupo],
+                }
+                for grupo in sorted(
+                    portafolios_por_activos,
+                    key=lambda value: int(value.rstrip("+")),
+                )
+            ],
+            "activos_totales": activos_totales,
+        },
+        "ultimos_problemas": [
+            {
+                "id": problema.pk,
+                "nombre": problema.nombre,
+                "tipo_objetivo": problema.tipo_objetivo,
+                "actualizado_en": problema.actualizado_en,
+            }
+            for problema in problemas_activos.order_by("-actualizado_en")[:5]
+        ],
+        "ultimos_portafolios": [
+            {
+                "id": portafolio.pk,
+                "nombre": portafolio.nombre,
+                "activos": portafolio.activos,
+                "actualizado_en": portafolio.actualizado_en,
+            }
+            for portafolio in portafolios_activos.order_by("-actualizado_en")[:5]
+        ],
+    })
+
+
 @ensure_csrf_cookie
 def inicio(request):
     return render(request, "index.html")
+
+
+def pagina_planes(request):
+    return render(request, "plans.html")

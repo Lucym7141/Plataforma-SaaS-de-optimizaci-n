@@ -17,6 +17,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 from django.core.exceptions import ImproperlyConfigured
 from django.core.management.utils import get_random_secret_key
 
+from .subscription_plans import load_subscription_plans
+
 
 def env_bool(name, default=False):
     return os.environ.get(name, str(default)).lower() in {
@@ -107,6 +109,9 @@ OPTIMIZER_TIME_LIMIT_SECONDS = int(
     os.environ.get("OPTIMIZER_TIME_LIMIT_SECONDS", "30")
 )
 MAX_PORTFOLIO_ASSETS = int(os.environ.get("MAX_PORTFOLIO_ASSETS", "100"))
+SUBSCRIPTION_PLANS = load_subscription_plans(
+    os.environ.get("SUBSCRIPTION_PLANS_JSON", "")
+)
 PUBLIC_APP_URL = os.environ.get(
     "PUBLIC_APP_URL",
     "http://127.0.0.1:8000" if DEBUG else "",
@@ -129,6 +134,13 @@ AUTH_LOGIN_LIMIT = os.environ.get("AUTH_LOGIN_LIMIT", "10/m")
 AUTH_PASSWORD_RESET_LIMIT = os.environ.get("AUTH_PASSWORD_RESET_LIMIT", "5/h")
 AUTH_VERIFY_LIMIT = os.environ.get("AUTH_VERIFY_LIMIT", "5/h")
 OPTIMIZER_SOLVE_LIMIT = os.environ.get("OPTIMIZER_SOLVE_LIMIT", "5/m")
+AI_MODELING_LIMIT = os.environ.get("AI_MODELING_LIMIT", "5/h")
+AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
+AZURE_OPENAI_API_VERSION = os.environ.get(
+    "AZURE_OPENAI_API_VERSION",
+    "2024-10-21",
+)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 1_048_576
 AUTH_SIGNUP_LIMIT = validate_rate("AUTH_SIGNUP_LIMIT", AUTH_SIGNUP_LIMIT)
 AUTH_LOGIN_LIMIT = validate_rate("AUTH_LOGIN_LIMIT", AUTH_LOGIN_LIMIT)
@@ -140,6 +152,10 @@ AUTH_VERIFY_LIMIT = validate_rate("AUTH_VERIFY_LIMIT", AUTH_VERIFY_LIMIT)
 OPTIMIZER_SOLVE_LIMIT = validate_rate(
     "OPTIMIZER_SOLVE_LIMIT",
     OPTIMIZER_SOLVE_LIMIT,
+)
+AI_MODELING_LIMIT = validate_rate(
+    "AI_MODELING_LIMIT",
+    AI_MODELING_LIMIT,
 )
 if not 1 <= OPTIMIZER_MAX_VARIABLES <= 500:
     raise ImproperlyConfigured(
@@ -164,7 +180,7 @@ if not 1 <= OPTIMIZER_TIME_LIMIT_SECONDS <= 300:
 
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "OptiPortfolio <no-reply@localhost>" if DEBUG else "",
+    "Vértice <no-reply@localhost>" if DEBUG else "",
 )
 if DEBUG:
     mailer_settings = {
@@ -228,6 +244,7 @@ REST_FRAMEWORK = {
         'password_reset': AUTH_PASSWORD_RESET_LIMIT,
         'verify': AUTH_VERIFY_LIMIT,
         'solve': OPTIMIZER_SOLVE_LIMIT,
+        'ai_modeling': AI_MODELING_LIMIT,
     },
 }
 if os.environ.get("DJANGO_NUM_PROXIES"):
@@ -307,7 +324,7 @@ elif DEBUG:
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
+            "NAME": os.environ.get("DJANGO_SQLITE_PATH", BASE_DIR / "db.sqlite3"),
         }
     }
 else:
@@ -352,3 +369,4 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / "staticfiles"
+MEDIA_ROOT = Path(os.environ.get("DJANGO_MEDIA_ROOT", BASE_DIR / "media"))

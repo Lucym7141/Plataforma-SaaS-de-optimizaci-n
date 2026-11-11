@@ -1,5 +1,9 @@
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
+const {
+    getE2EEnvironment,
+    removeE2EDatabase
+} = require("./environment");
 
 module.exports = async () => {
     const windowsPython = "..\\.venv\\Scripts\\python.exe";
@@ -13,11 +17,13 @@ module.exports = async () => {
         {
             cwd: "backend",
             encoding: "utf8",
-            stdio: "inherit"
+            stdio: "inherit",
+            env: getE2EEnvironment()
         }
     );
     if (cleanup.error) throw cleanup.error;
     if (cleanup.status !== 0) {
         throw new Error(`E2E fixture cleanup failed with exit code ${cleanup.status}.`);
     }
+    removeE2EDatabase();
 };

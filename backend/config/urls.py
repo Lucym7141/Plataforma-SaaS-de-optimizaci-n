@@ -34,6 +34,8 @@ def health(request):
 
 urlpatterns = [
     path("", views.inicio, name="inicio"),
+    path("planes", views.pagina_planes, name="pagina_planes_sin_barra"),
+    path("planes/", views.pagina_planes, name="pagina_planes"),
     path("health/", health, name="health"),
     path("admin/", admin.site.urls),
     path("api/", include("optimizacion.urls")),

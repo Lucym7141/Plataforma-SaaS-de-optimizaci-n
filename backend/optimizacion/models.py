@@ -1,7 +1,37 @@
 
+import uuid
+
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.db.models.signals import post_delete
 from django.conf import settings
+from django.dispatch import receiver
+
+
+def perfil_foto_upload_to(instance, filename):
+    extension = filename.rsplit(".", 1)[-1].lower()
+    return f"perfiles/{instance.usuario_id}/{uuid.uuid4().hex}.{extension}"
+
+
+class PerfilUsuario(models.Model):
+    usuario = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="perfil",
+    )
+    nombre_visible = models.CharField(max_length=80, blank=True)
+    descripcion = models.CharField(max_length=240, blank=True)
+    foto = models.ImageField(upload_to=perfil_foto_upload_to, blank=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Perfil de {self.usuario}"
+
+
+@receiver(post_delete, sender=PerfilUsuario)
+def eliminar_foto_perfil_al_borrar_perfil(sender, instance, **kwargs):
+    if instance.foto:
+        instance.foto.delete(save=False)
 
 
 class ProblemaOptimizacion(models.Model):

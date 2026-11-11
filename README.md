@@ -1,4 +1,4 @@
-# Plataforma-SaaS-de-optimizaci-n
+# Vértice
 Plataforma SaaS de optimización financiera que maximiza el rendimiento de portafolios de inversión bajo estrictos límites de riesgo y regulación.
 
 ## Autenticación y datos privados
@@ -17,14 +17,71 @@ puede asignarles un propietario desde Django Admin.
 Desde PowerShell en la raíz del repositorio:
 
 ```powershell
+npm ci
+npm run build
 cd backend
 ..\.venv\Scripts\python.exe manage.py migrate
 ..\.venv\Scripts\python.exe manage.py runserver
 ```
 
-Abre `http://127.0.0.1:8000` para registrarte o iniciar sesión. En desarrollo,
+La interfaz existente sigue servida por Django; Vite compila las nuevas islas
+React en `frontend/react-build`, que Django sirve como archivos estáticos. Al
+incorporar componentes React nuevos, ejecuta `npm run build` antes de iniciar
+Django. Abre `http://127.0.0.1:8000` para registrarte o iniciar sesión. En desarrollo,
 los mensajes de verificación y recuperación se imprimen en la consola del
 servidor.
+
+## Asistente de modelos con Azure OpenAI
+
+El asistente convierte texto en un borrador de modelo; no crea ni ejecuta el
+modelo automáticamente. Para habilitarlo:
+
+1. Despliega un modelo compatible con salida JSON. Para un deployment de
+   Microsoft Foundry, copia el punto de conexión que termina en
+   `/openai/v1/responses` y el nombre exacto de la implementación.
+2. En desarrollo local, ejecuta `az login` con una cuenta que tenga el rol
+   **Cognitive Services OpenAI User** en el recurso.
+3. En PowerShell, configura el endpoint y deployment en la misma terminal desde
+   la que iniciarás Django:
+
+   ```powershell
+   $env:AZURE_OPENAI_ENDPOINT = "https://<recurso>.services.ai.azure.com/openai/v1/responses"
+   $env:AZURE_OPENAI_DEPLOYMENT = "<nombre-exacto-del-deployment>"
+   ```
+
+   Para el endpoint clásico `https://<recurso>.openai.azure.com`, el servicio
+   conserva compatibilidad con Chat Completions y requiere
+   `AZURE_OPENAI_API_VERSION` (predeterminado: `2024-10-21`).
+   Luego inicia Django como en la sección de ejecución local. Si el servidor ya
+   estaba corriendo, reinícialo para que lea la configuración.
+
+En producción, asigna una identidad administrada a la aplicación y otórgale el
+rol **Cognitive Services OpenAI User** sobre el recurso. Configura las mismas
+variables `AZURE_OPENAI_*` en el entorno del servicio; con `DEBUG=false` se
+usa la identidad administrada, sin guardar una clave de Azure. El asistente
+envía a Azure OpenAI el texto escrito por la persona, no almacena ese texto y
+requiere una acción explícita para generar. El borrador debe revisarse antes
+de guardarse o resolverlo. El límite inicial es de 5 generaciones por usuario
+por hora y se puede ajustar mediante `AI_MODELING_LIMIT`.
+
+## Planes y precios
+
+La pantalla pública muestra planes informativos; no cobra ni activa
+suscripciones ni aplica los límites indicados. Inicialmente presenta Inicial
+gratis (3 modelos, 1 portafolio y 10 activos por portafolio) y Profesional a
+USD 3.95 al mes (25 modelos, 10 portafolios y 50 activos por portafolio), y
+Profesional Pro a USD 10.50 al mes (100 modelos, 25 portafolios y 100 activos
+por portafolio). El plan Equipos queda pendiente hasta que exista colaboración
+entre usuarios. Los precios y características se pueden configurar con
+`SUBSCRIPTION_PLANS_JSON`. Ejemplo en PowerShell:
+
+```powershell
+$env:SUBSCRIPTION_PLANS_JSON = '[{"id":"personal","name":"Personal","description":"Para uso individual.","price":19900,"currency":"COP","interval":"monthly","features":["Modelos de optimización","Reportes PDF y Excel"],"featured":false}]'
+```
+
+`price` es un número en unidades de la moneda indicada (`COP`, `MXN`, `USD`,
+etc.); también puede ser `null` mientras se decide el precio. `interval` admite
+`monthly`, `yearly` o `one_time`. Reinicia Django para aplicar la configuración.
 
 ## Configuración de producción
 
@@ -42,6 +99,9 @@ En producción configura:
   `postgresql://usuario:clave@db.example.com:5432/opti?sslmode=require`
 - `DJANGO_ALLOW_REGISTRATION=false` para cerrar el registro público. Es el
   valor predeterminado cuando `DEBUG` está desactivado.
+- `DJANGO_MEDIA_ROOT` opcional para definir el almacenamiento de fotos de
+  perfil. Usa un volumen persistente con permisos restringidos; las fotos se
+  entregan únicamente a la cuenta autenticada.
 
 Con `DEBUG=false`, Django redirige HTTP a HTTPS, activa cookies seguras y HSTS
 por un año, y exige una base PostgreSQL con TLS. Si Django está detrás de un

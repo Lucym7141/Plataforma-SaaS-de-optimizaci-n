@@ -14,6 +14,10 @@ urlpatterns = [
     path("auth/delete/", views.eliminar_cuenta, name="eliminar_cuenta"),
     path("auth/change-password/", views.cambiar_contrasena, name="cambiar_contrasena"),
     path("auth/config/", views.configuracion_autenticacion, name="auth_config"),
+    path("planes/", views.listar_planes, name="listar_planes"),
+    path("profile/", views.perfil_usuario, name="perfil_usuario"),
+    path("profile/photo/", views.foto_perfil_usuario, name="foto_perfil_usuario"),
+    path("resumen/", views.resumen_usuario, name="resumen_usuario"),
     path("auth/verify/", views.verificar_correo, name="verificar_correo"),
     path(
         "auth/verify/resend/",
@@ -34,6 +38,11 @@ urlpatterns = [
         "problemas/archivados/",
         views.listar_problemas_archivados,
         name="listar_problemas_archivados",
+    ),
+    path(
+        "problemas/generar/",
+        views.generar_problema_desde_texto,
+        name="generar_problema_desde_texto",
     ),
     path(
         "problemas/",
@@ -114,5 +123,15 @@ urlpatterns = [
         "problemas/<int:problema_id>/resolver/",
         views.resolver_problema_api,
         name="resolver_problema",
+    ),
+    path(
+        "problemas/<int:problema_id>/ejecuciones/<int:ejecucion_id>/reporte/<str:formato>/",
+        views.reporte_ejecucion_problema,
+        name="reporte_ejecucion_problema",
+    ),
+    path(
+        "portafolios/<int:portafolio_id>/ejecuciones/<int:ejecucion_id>/reporte/<str:formato>/",
+        views.reporte_ejecucion_portafolio,
+        name="reporte_ejecucion_portafolio",
     ),
 ]
