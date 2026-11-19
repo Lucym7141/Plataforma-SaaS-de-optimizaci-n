@@ -1786,7 +1786,11 @@ class PerfilUsuarioTests(TestCase):
         self.assertEqual(photo_response.status_code, 200)
         self.assertEqual(photo_response["Content-Type"], "image/png")
         self.assertEqual(photo_response["Cache-Control"], "private, no-store")
-        photo_response.close()
+        # Consumir el contenido deja que el cliente de pruebas cierre la
+        # respuesta sin disparar close_old_connections; llamar a close()
+        # directamente cierra la conexión de PostgreSQL de la prueba.
+        photo_bytes = b"".join(photo_response.streaming_content)
+        self.assertTrue(photo_bytes.startswith(b"\x89PNG"))
 
         other_client = APIClient()
         other_client.force_authenticate(user=self.other_user)
