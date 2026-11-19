@@ -55,3 +55,7 @@ from .pages import (  # noqa: F401
     inicio,
     pagina_planes,
 )
+from .explanations import (  # noqa: F401
+    explicar_ejecucion_portafolio,
+    explicar_ejecucion_problema,
+)

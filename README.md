@@ -97,8 +97,26 @@ pedir un token. Guárdala solo en `.env` o en el gestor de secretos del
 servidor, nunca en el repositorio, y rótala desde Azure si se expone. El asistente
 envía a Azure OpenAI el texto escrito por la persona, no almacena ese texto y
 requiere una acción explícita para generar. El borrador debe revisarse antes
-de guardarse o resolverlo. El límite inicial es de 5 generaciones por usuario
-por hora y se puede ajustar mediante `AI_MODELING_LIMIT`.
+de guardarse o resolverlo. El límite inicial es de 5 consultas de IA por
+usuario por hora y se puede ajustar mediante `AI_MODELING_LIMIT`.
+
+### Explicación de resultados
+
+Después de resolver un modelo u optimizar un portafolio, el botón **Explicar
+con IA** resume en lenguaje sencillo el resultado. La app calcula los datos y
+la IA solo los redacta, sin agregar cifras:
+
+- **Modelos:** al resolver se guardan la holgura de cada restricción, si está
+  activa y, en modelos solo continuos, su precio sombra (cuánto cambia el
+  objetivo por cada unidad adicional del lado derecho). Si el modelo es
+  infactible o no acotado, la explicación indica qué revisar.
+- **Portafolios:** peso y riesgo por activo, concentración, límites activos y
+  escenarios de estrés. Las instrucciones prohíben recomendar comprar, vender
+  o mantener activos: no es asesoría financiera.
+
+Cada explicación se guarda con su ejecución: volver a abrirla no consulta ni
+cobra de nuevo. Generar borradores y explicaciones consume la cuota mensual de
+IA del plan (ver Planes y precios).
 
 ## Planes y precios
 
@@ -126,8 +144,10 @@ Profesional Pro a USD 10.50 al mes (100 modelos, 25 portafolios y 100 activos
 por portafolio). El plan Equipos queda pendiente hasta que exista colaboración
 entre usuarios. Los precios y características se pueden configurar con
 `SUBSCRIPTION_PLANS_JSON`. Cada plan admite un campo opcional `limits` con
-`models`, `portfolios` y `assets_per_portfolio` (enteros o `null` para sin
-límite); un plan sin `limits` no restringe nada. Ejemplo en PowerShell:
+`models`, `portfolios`, `assets_per_portfolio` y `ai_requests_per_month`
+(enteros o `null` para sin límite); un plan sin `limits` no restringe nada.
+La cuota de IA se renueva el día 1 de cada mes (Inicial 10, Profesional 100 y
+Profesional Pro 500 consultas por defecto). Ejemplo en PowerShell:
 
 ```powershell
 $env:SUBSCRIPTION_PLANS_JSON = '[{"id":"personal","name":"Personal","description":"Para uso individual.","price":19900,"currency":"COP","interval":"monthly","features":["Modelos de optimización","Reportes PDF y Excel"],"featured":false}]'

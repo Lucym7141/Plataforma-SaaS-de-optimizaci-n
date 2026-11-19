@@ -292,6 +292,8 @@ class EjecucionOptimizacion(models.Model):
     mensaje = models.TextField(blank=True)
     detalles = models.JSONField(default=dict, blank=True)
     modelo_snapshot = models.JSONField(default=dict, blank=True)
+    # Explicación generada con IA; se guarda para no volver a cobrarla.
+    explicacion_ia = models.JSONField(null=True, blank=True)
     iniciada_en = models.DateTimeField(auto_now_add=True)
     finalizada_en = models.DateTimeField(null=True, blank=True)
 
@@ -400,6 +402,8 @@ class EjecucionPortafolio(models.Model):
     rendimiento_anualizado = models.FloatField(null=True, blank=True)
     volatilidad_anualizada = models.FloatField(null=True, blank=True)
     resultados_estres = models.JSONField(default=dict)
+    # Explicación generada con IA; se guarda para no volver a cobrarla.
+    explicacion_ia = models.JSONField(null=True, blank=True)
     creada_en = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -467,3 +471,22 @@ class OptimizationJob(models.Model):
             models.Index(fields=["owner", "status"]),
             models.Index(fields=["created_at"]),
         ]
+
+
+class UsoIA(models.Model):
+    """Registro de cada consulta a la IA, para la cuota mensual del plan."""
+
+    class Tipo(models.TextChoices):
+        BORRADOR = "borrador", "Borrador de modelo"
+        EXPLICACION = "explicacion", "Explicación de resultado"
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="usos_ia",
+    )
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["usuario", "creado_en"])]

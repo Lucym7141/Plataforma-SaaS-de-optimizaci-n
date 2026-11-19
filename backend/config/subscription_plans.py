@@ -5,7 +5,12 @@ import re
 from django.core.exceptions import ImproperlyConfigured
 
 
-PLAN_LIMIT_KEYS = ("models", "portfolios", "assets_per_portfolio")
+PLAN_LIMIT_KEYS = (
+    "models",
+    "portfolios",
+    "assets_per_portfolio",
+    "ai_requests_per_month",
+)
 
 # "limits" es opcional: un valor null (o un plan sin "limits") significa sin
 # límite para ese recurso. El primer plan de la lista es el que reciben las
@@ -22,12 +27,14 @@ DEFAULT_SUBSCRIPTION_PLANS = [
             "Hasta 3 modelos de optimización",
             "1 portafolio",
             "Hasta 10 activos por portafolio",
+            "10 consultas de IA al mes",
         ],
         "featured": False,
         "limits": {
             "models": 3,
             "portfolios": 1,
             "assets_per_portfolio": 10,
+            "ai_requests_per_month": 10,
         },
     },
     {
@@ -41,12 +48,14 @@ DEFAULT_SUBSCRIPTION_PLANS = [
             "Hasta 25 modelos de optimización",
             "Hasta 10 portafolios",
             "Hasta 50 activos por portafolio",
+            "100 consultas de IA al mes",
         ],
         "featured": True,
         "limits": {
             "models": 25,
             "portfolios": 10,
             "assets_per_portfolio": 50,
+            "ai_requests_per_month": 100,
         },
     },
     {
@@ -60,12 +69,14 @@ DEFAULT_SUBSCRIPTION_PLANS = [
             "Hasta 100 modelos de optimización",
             "Hasta 25 portafolios",
             "Hasta 100 activos por portafolio",
+            "500 consultas de IA al mes",
         ],
         "featured": False,
         "limits": {
             "models": 100,
             "portfolios": 25,
             "assets_per_portfolio": 100,
+            "ai_requests_per_month": 500,
         },
     },
 ]
@@ -110,7 +121,8 @@ def load_subscription_plans(raw_value):
         limits = plan.get("limits", {})
         if not isinstance(limits, dict) or not set(limits) <= set(PLAN_LIMIT_KEYS):
             raise ImproperlyConfigured(
-                "limits solo admite models, portfolios y assets_per_portfolio."
+                "limits solo admite models, portfolios, assets_per_portfolio y "
+                "ai_requests_per_month."
             )
         for value in limits.values():
             if value is not None and (

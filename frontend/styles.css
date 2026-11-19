@@ -4894,3 +4894,58 @@ body:not(.authenticated) .notification-menu {
     text-align: right;
     white-space: nowrap;
 }
+
+.ai-explanation {
+    display: grid;
+    gap: 10px;
+    margin-top: 20px;
+    padding: 16px 18px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--primary);
+    border-radius: 14px;
+}
+
+.ai-explanation-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.ai-explanation-heading h3 {
+    margin: 0;
+}
+
+.ai-explanation-intro,
+.ai-explanation-note {
+    margin: 0;
+    font-size: 0.88rem;
+}
+
+.ai-explanation-body {
+    display: grid;
+    gap: 8px;
+}
+
+.ai-explanation-body h4 {
+    margin: 6px 0 0;
+}
+
+.ai-explanation-body ul {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.ai-explanation-summary {
+    margin: 0;
+    font-size: 1rem;
+    line-height: 1.55;
+    color: var(--text);
+}
+
+.ai-explanation-note {
+    color: var(--muted);
+    font-style: italic;
+}

@@ -1306,3 +1306,77 @@ test("recent calculations survive a reload and reopen their results", async ({ p
         .toContainText("Rendimiento esperado");
     await expect(page.locator("#portfolio-history")).toBeVisible();
 });
+
+test("solved models can be explained with AI", async ({ page }) => {
+    await signIn(page);
+    const name = `E2E explicar ${Date.now()}`;
+    const created = await page.evaluate(async (problemName) => {
+        const csrfToken = document.cookie
+            .split("; ")
+            .find((cookie) => cookie.startsWith("csrftoken="))
+            ?.slice("csrftoken=".length);
+        const response = await fetch("/api/problemas/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken
+            },
+            body: JSON.stringify({
+                nombre: problemName,
+                tipo_objetivo: "MAX",
+                variables: [
+                    { nombre: "x", tipo: "CONT", limite_inferior: "0" },
+                    { nombre: "y", tipo: "CONT", limite_inferior: "0" }
+                ],
+                terminos_objetivo: [
+                    { variable_nombre: "x", coeficiente: "3" },
+                    { variable_nombre: "y", coeficiente: "5" }
+                ],
+                restricciones: [{
+                    nombre: "capacidad",
+                    operador: "LE",
+                    lado_derecho: "12",
+                    terminos: [
+                        { variable_nombre: "x", coeficiente: "2" },
+                        { variable_nombre: "y", coeficiente: "3" }
+                    ]
+                }]
+            })
+        });
+        return response.json();
+    }, name);
+
+    // Azure no está disponible en las pruebas: se simula su respuesta.
+    let explainCalls = 0;
+    await page.route("**/ejecuciones/*/explicar/", async (route) => {
+        explainCalls += 1;
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                resumen: "La restricción capacidad limita la utilidad a 20.",
+                puntos_clave: ["Capacidad está activa: no queda margen."],
+                sugerencias: ["Verifica si las 12 horas de capacidad son correctas."]
+            })
+        });
+    });
+
+    await page.reload();
+    await openView(page, "#problem-workspace", "models");
+    await page.locator(".problem-card").filter({ hasText: name })
+        .getByRole("button", { name: "Abrir" }).click();
+    await expect(page.locator("#problem-title")).toHaveText(name);
+    await page.getByRole("button", { name: "Resolver problema" }).click();
+    await expect(page.locator("#result-status")).toHaveText("Óptimo");
+
+    const section = page.locator('[data-explanation-section="problem"]');
+    await expect(section).toBeVisible();
+    await section.getByRole("button", { name: "Explicar con IA" }).click();
+    const body = page.locator('[data-explanation-body="problem"]');
+    await expect(body).toContainText("La restricción capacidad limita la utilidad a 20.");
+    await expect(body.locator("li")).toHaveCount(2);
+    await expect(body).toContainText("Generado con IA");
+    await expect(section.getByRole("button", { name: "Explicar con IA" })).toBeHidden();
+    expect(explainCalls).toBe(1);
+    expect(created.id).toBeTruthy();
+});

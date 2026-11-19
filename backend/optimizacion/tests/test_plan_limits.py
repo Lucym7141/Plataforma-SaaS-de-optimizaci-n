@@ -206,7 +206,11 @@ class PlanLimitTests(TestCase):
         self.assertFalse(plan["unlimited"])
         self.assertEqual(plan["limits"]["models"], 3)
         self.assertEqual(plan["limits"]["assets_per_portfolio"], 10)
-        self.assertEqual(plan["usage"], {"models": 2, "portfolios": 0})
+        self.assertEqual(plan["limits"]["ai_requests_per_month"], 10)
+        self.assertEqual(
+            plan["usage"],
+            {"models": 2, "portfolios": 0, "ai_requests_this_month": 0},
+        )
 
     def test_superusuario_no_tiene_limites(self):
         self.user.is_superuser = True
