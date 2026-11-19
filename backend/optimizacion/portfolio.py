@@ -2,6 +2,10 @@ import numpy as np
 from scipy.optimize import linprog, minimize
 
 
+class PortfolioSolverError(ValueError):
+    """Error esperado del modelo cuyo mensaje se puede mostrar al usuario."""
+
+
 def _constraints(mu, categories, category_caps, minimum_return=None):
     n = len(mu)
     constraints = [{
@@ -51,7 +55,11 @@ def _feasible_return_extremes(mu, categories, category_caps, bounds):
     minimum = linprog(c=mu, **common)
     maximum = linprog(c=-mu, **common)
     if not minimum.success or not maximum.success:
-        raise ValueError("Los límites indicados no permiten una cartera factible.")
+        raise PortfolioSolverError(
+            "Los límites indicados no permiten una cartera factible. Revisa "
+            "que los pesos mínimos no sumen más de 100 % y que los pesos "
+            "máximos y los límites por categoría permitan llegar al 100 %."
+        )
     return float(mu @ minimum.x), float(mu @ maximum.x), minimum.x, maximum.x
 
 
@@ -144,12 +152,12 @@ def optimizar_media_varianza(
         category_caps,
         bounds,
     ):
-        raise ValueError("No se encontró una solución de portafolio válida.")
+        raise PortfolioSolverError("No se encontró una solución de portafolio válida.")
 
     weights = np.asarray(result.x, dtype=float)
     variance = float(weights @ sigma @ weights)
     if variance < -1e-10:
-        raise ValueError("La matriz de covarianza produjo varianza negativa.")
+        raise PortfolioSolverError("La matriz de covarianza produjo varianza negativa.")
     variance = max(variance, 0.0)
     expected_return = float(mu @ weights)
     volatility = float(np.sqrt(variance))
@@ -234,7 +242,7 @@ def calcular_frontera_eficiente(
             bounds,
             minimum_return=float(target),
         ):
-            raise ValueError("No se pudo calcular toda la frontera eficiente.")
+            raise PortfolioSolverError("No se pudo calcular toda la frontera eficiente.")
         weights = np.asarray(result.x, dtype=float)
         variance = max(float(weights @ sigma @ weights), 0.0)
         achieved_return = float(mu @ weights)
