@@ -100,6 +100,22 @@ requiere una acción explícita para generar. El borrador debe revisarse antes
 de guardarse o resolverlo. El límite inicial es de 5 consultas de IA por
 usuario por hora y se puede ajustar mediante `AI_MODELING_LIMIT`.
 
+### Conversación para ajustar el modelo
+
+Con el editor de modelos abierto, **Ajustar el borrador conversando** permite
+pedir cambios en lenguaje natural («agrega una restricción de 40 horas»,
+«cambia x a entera»). El asistente aplica solo lo pedido y conserva el resto;
+si falta un dato pregunta en lugar de suponerlo. El modelo propuesto se valida
+con las mismas reglas que al guardar antes de cargarse en el editor, y
+**Deshacer último cambio** recupera la versión anterior. Nada se guarda hasta
+pulsar «Crear».
+
+- La conversación no se almacena: el navegador envía el borrador actual y
+  los últimos 10 mensajes en cada consulta.
+- Cada mensaje consume una consulta de la cuota mensual de IA. Tiene su
+  propio límite por hora (`AI_CHAT_LIMIT`, 30 por defecto), más amplio que el
+  de los borradores.
+
 ### Borradores de portafolio
 
 En el panel de portafolios, **Crear portafolio con IA a partir de una

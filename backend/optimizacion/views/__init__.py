@@ -23,6 +23,7 @@ from .account import (  # noqa: F401
     resumen_usuario,
 )
 from .problems import (  # noqa: F401
+    conversar_modelo,
     listar_problemas,
     generar_problema_desde_texto,
     detalle_problema,

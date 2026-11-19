@@ -1,4 +1,5 @@
 
+import json
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -786,3 +787,29 @@ class ProblemaDesdeTextoSerializer(serializers.Serializer):
         max_length=6000,
         trim_whitespace=True,
     )
+
+
+class MensajeConversacionSerializer(serializers.Serializer):
+    rol = serializers.ChoiceField(choices=["usuario", "asistente"])
+    texto = serializers.CharField(max_length=2000, trim_whitespace=True)
+
+
+class ConversacionModeloSerializer(serializers.Serializer):
+    instruccion = serializers.CharField(
+        min_length=2,
+        max_length=2000,
+        trim_whitespace=True,
+    )
+    modelo = serializers.JSONField()
+    historial = MensajeConversacionSerializer(many=True, required=False, default=list)
+
+    def validate_modelo(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("El modelo debe ser un objeto.")
+        if len(json.dumps(value, ensure_ascii=False)) > 30000:
+            raise serializers.ValidationError("El modelo es demasiado grande.")
+        return value
+
+    def validate_historial(self, value):
+        # Solo los últimos mensajes: limita el costo y el tamaño del envío.
+        return value[-10:]

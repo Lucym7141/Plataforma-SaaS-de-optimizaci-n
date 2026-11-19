@@ -156,6 +156,8 @@ AUTH_PASSWORD_RESET_LIMIT = os.environ.get("AUTH_PASSWORD_RESET_LIMIT", "5/h")
 AUTH_VERIFY_LIMIT = os.environ.get("AUTH_VERIFY_LIMIT", "5/h")
 OPTIMIZER_SOLVE_LIMIT = os.environ.get("OPTIMIZER_SOLVE_LIMIT", "5/m")
 AI_MODELING_LIMIT = os.environ.get("AI_MODELING_LIMIT", "5/h")
+# La conversación necesita más mensajes por hora que generar borradores.
+AI_CHAT_LIMIT = os.environ.get("AI_CHAT_LIMIT", "30/h")
 AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
 # Alternativa a la identidad de Azure para servidores fuera de Azure (p. ej.
@@ -181,6 +183,7 @@ AI_MODELING_LIMIT = validate_rate(
     "AI_MODELING_LIMIT",
     AI_MODELING_LIMIT,
 )
+AI_CHAT_LIMIT = validate_rate("AI_CHAT_LIMIT", AI_CHAT_LIMIT)
 if not 1 <= OPTIMIZER_MAX_VARIABLES <= 500:
     raise ImproperlyConfigured(
         "OPTIMIZER_MAX_VARIABLES debe estar entre 1 y 500."
@@ -269,6 +272,7 @@ REST_FRAMEWORK = {
         'verify': AUTH_VERIFY_LIMIT,
         'solve': OPTIMIZER_SOLVE_LIMIT,
         'ai_modeling': AI_MODELING_LIMIT,
+        'ai_chat': AI_CHAT_LIMIT,
     },
 }
 if os.environ.get("DJANGO_NUM_PROXIES"):
