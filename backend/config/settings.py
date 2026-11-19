@@ -275,6 +275,8 @@ if os.environ.get("DJANGO_NUM_PROXIES"):
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Sirve los archivos estáticos recolectados sin depender del proxy.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -322,7 +324,9 @@ if DATABASE_URL:
     query = parse_qs(parsed_database_url.query)
     sslmode = query.get("sslmode", ["require"])[0]
     allowed_ssl_modes = {"require", "verify-ca", "verify-full"}
-    if DEBUG:
+    # Sin cifrado solo en desarrollo o, de forma explícita, cuando la base
+    # está en la misma red privada de Docker que la app (compose.yaml).
+    if DEBUG or env_bool("DJANGO_DATABASE_ALLOW_INSECURE"):
         allowed_ssl_modes.add("disable")
     if sslmode not in allowed_ssl_modes:
         raise ImproperlyConfigured(

@@ -129,6 +129,64 @@ $env:SUBSCRIPTION_PLANS_JSON = '[{"id":"personal","name":"Personal","description
 etc.); también puede ser `null` mientras se decide el precio. `interval` admite
 `monthly`, `yearly` o `one_time`. Reinicia Django para aplicar la configuración.
 
+## Despliegue con Docker
+
+`compose.yaml` levanta Vértice completo con un solo comando:
+
+| Servicio | Función |
+|---|---|
+| `caddy` | Recibe el tráfico en los puertos 80 y 443 y gestiona el certificado HTTPS. |
+| `web` | Django con gunicorn; WhiteNoise sirve los archivos estáticos. |
+| `worker` | Worker de Celery que ejecuta los cálculos. |
+| `redis` | Cola de trabajos. |
+| `db` | PostgreSQL 16 con sus datos en un volumen. |
+| `migrate` | Aplica las migraciones antes de arrancar `web` y `worker`. |
+
+1. Copia la configuración y complétala:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+   Cambia `DJANGO_SECRET_KEY` y `POSTGRES_PASSWORD` por valores aleatorios,
+   configura el correo (`EMAIL_*`) y, con un dominio real, cambia `localhost`
+   por tu dominio en `SITE_ADDRESS`, `DJANGO_ALLOWED_HOSTS`, `PUBLIC_APP_URL`
+   y `DJANGO_CSRF_TRUSTED_ORIGINS`. El dominio debe apuntar al servidor y los
+   puertos 80 y 443 deben estar abiertos para que Caddy obtenga el
+   certificado. Con `localhost` el navegador mostrará un aviso de certificado;
+   en ese caso usa `DJANGO_SECURE_HSTS_SECONDS=60`.
+
+2. Construye y arranca:
+
+   ```powershell
+   docker compose up -d --build
+   ```
+
+3. Crea la cuenta administradora y, si corresponde, exime de límites la cuenta
+   de ventas y demostraciones:
+
+   ```powershell
+   docker compose exec web python manage.py createsuperuser
+   docker compose exec web python manage.py asignar_plan yoider00 --sin-limites
+   ```
+
+Para actualizar, ejecuta `git pull` y de nuevo `docker compose up -d --build`;
+las migraciones se aplican solas. Programa a diario (por ejemplo con el
+programador de tareas o cron del servidor):
+
+```powershell
+docker compose exec web python manage.py cleanup_rate_limits
+docker compose exec web python manage.py cleanup_optimization_jobs
+```
+
+`docker compose logs -f web worker` muestra los registros. Los datos viven en
+los volúmenes `pg-data` (base) y `media` (fotos de perfil); `docker compose
+down` los conserva y `docker compose down -v` **los borra**. La base solo es
+accesible dentro de la red interna de Docker, por eso compose activa
+`DJANGO_DATABASE_ALLOW_INSECURE`; no la uses con una base externa. CI construye
+la imagen y comprueba en cada cambio que HTTPS, los archivos estáticos, la base
+y el worker respondan.
+
 ## Configuración de producción
 
 Instala las dependencias desde la raíz con `pip install -r requirements.txt`.
@@ -172,8 +230,9 @@ cd backend
 ..\.venv\Scripts\python.exe manage.py collectstatic --noinput
 ```
 
-Sirve `staticfiles` desde el proxy o un servicio de archivos estáticos; no uses
-el servidor de desarrollo en producción. Programa
+WhiteNoise sirve `staticfiles` desde Django (también puedes servirlos desde el
+proxy o un CDN); ejecuta la app con gunicorn y no uses el servidor de
+desarrollo en producción. Programa
 `manage.py cleanup_rate_limits` para ejecutarse diariamente y purgar los
 contadores expirados. Programa también `manage.py cleanup_optimization_jobs`
 a diario: marca como fallidos los cálculos que quedaron colgados tras una

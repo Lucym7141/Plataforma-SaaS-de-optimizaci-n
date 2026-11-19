@@ -1,0 +1,7 @@
+# Caddy termina HTTPS y reenvía todo a Django (gunicorn + WhiteNoise).
+# Con un dominio real obtiene y renueva el certificado automáticamente;
+# con "localhost" usa una autoridad local (el navegador mostrará un aviso).
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+	reverse_proxy web:8000
+}

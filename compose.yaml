@@ -1,12 +1,112 @@
+# Vértice completo: Caddy (HTTPS) → web (Django + gunicorn) → PostgreSQL,
+# con Redis como cola y un worker de Celery para los cálculos.
+#
+#   Producción o prueba completa:  docker compose up -d --build
+#   Solo Redis para desarrollo:    docker compose up -d redis
+#
+# La configuración se lee de .env (copia .env.example).
+
+name: vertice
+
+x-app: &app
+  build: .
+  image: vertice-app
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    DJANGO_DEBUG: "false"
+    DATABASE_URL: postgresql://vertice:${POSTGRES_PASSWORD:-}@db:5432/vertice?sslmode=disable
+    # La base solo es accesible en la red interna de Docker.
+    DJANGO_DATABASE_ALLOW_INSECURE: "true"
+    DJANGO_TRUST_PROXY_HEADERS: "true"
+    CELERY_BROKER_URL: redis://redis:6379/0
+  volumes:
+    - media:/data/media
+  restart: unless-stopped
+
 services:
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes"]
     ports:
+      # Solo accesible desde este equipo, para el worker de desarrollo.
       - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: vertice
+      POSTGRES_USER: vertice
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vertice -d vertice"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  migrate:
+    <<: *app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    <<: *app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "config", "worker", "--loglevel=info", "--concurrency=2"]
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping --timeout 5 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
   redis-data:
+  pg-data:
+  media:
+  caddy-data:
+  caddy-config:
