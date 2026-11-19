@@ -1,6 +1,7 @@
 const { spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const { getE2EEnvironment } = require("./environment");
+const { startCeleryWorker } = require("./celery-worker");
 
 module.exports = async () => {
     const windowsPython = "..\\.venv\\Scripts\\python.exe";
@@ -40,4 +41,5 @@ module.exports = async () => {
     if (seed.status !== 0) {
         throw new Error(`E2E user setup failed with exit code ${seed.status}.`);
     }
+    await startCeleryWorker(python);
 };

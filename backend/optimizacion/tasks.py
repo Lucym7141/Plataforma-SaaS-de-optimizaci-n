@@ -30,7 +30,7 @@ def _portfolio_solver_inputs(snapshot):
     return {
         "bounds": [
             (float(minimum), float(maximum))
-            for minimum, maximum in zip(minimums, maximums)
+            for minimum, maximum in zip(minimums, maximums, strict=False)
         ],
         "categorias": snapshot.get("categorias") or [""] * count,
         "limites_categoria": {

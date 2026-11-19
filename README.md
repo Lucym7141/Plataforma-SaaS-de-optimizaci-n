@@ -21,13 +21,20 @@ npm ci
 npm run build
 docker compose up -d redis
 cd backend
+$env:DJANGO_DEBUG = "true"
 ..\.venv\Scripts\python.exe manage.py migrate
 ```
+
+`DEBUG` está desactivado por defecto para que un despliegue sin configurar
+falle de forma segura. `manage.py runserver` y `manage.py test` lo activan
+solos; para los demás comandos y el worker define `DJANGO_DEBUG=true` en la
+terminal de desarrollo.
 
 En una terminal, inicia el worker de Celery:
 
 ```powershell
 cd backend
+$env:DJANGO_DEBUG = "true"
 ..\.venv\Scripts\celery.exe -A config worker --pool=solo --loglevel=info
 ```
 

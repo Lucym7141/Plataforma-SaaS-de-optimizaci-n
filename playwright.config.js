@@ -39,7 +39,8 @@ module.exports = defineConfig({
             DJANGO_DEBUG: "true",
             // The serial E2E suite signs in repeatedly from the same IP.
             AUTH_LOGIN_LIMIT: "100/m",
-            CELERY_TASK_ALWAYS_EAGER: "true"
+            CELERY_TASK_ALWAYS_EAGER:
+                process.env.E2E_CELERY_WORKER === "true" ? "false" : "true"
         }
     },
     globalSetup: "./tests/e2e/global-setup.js",

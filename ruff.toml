@@ -1,0 +1,11 @@
+target-version = "py312"
+extend-exclude = ["backend/optimizacion/migrations"]
+
+[lint]
+# Reglas por defecto (errores reales: nombres sin definir, imports sin usar,
+# sintaxis) más bugbear para patrones propensos a errores.
+extend-select = ["B"]
+
+[lint.per-file-ignores]
+# Estos scripts configuran Django antes de importar los modelos.
+"tests/e2e/*.py" = ["E402"]

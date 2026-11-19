@@ -9,9 +9,7 @@ from django.utils import timezone
 from .models import (
     ProblemaOptimizacion,
     VariableDecision,
-    TerminoObjetivo,
     Restriccion,
-    TerminoRestriccion,
     EjecucionOptimizacion,
     ValorSolucion,
 )

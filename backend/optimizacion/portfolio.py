@@ -74,7 +74,7 @@ def _is_feasible(
     ):
         return False
 
-    for weight, (lower, upper) in zip(weights, bounds):
+    for weight, (lower, upper) in zip(weights, bounds, strict=False):
         if (
             (lower is not None and weight < float(lower) - tolerance)
             or (upper is not None and weight > float(upper) + tolerance)
@@ -84,7 +84,7 @@ def _is_feasible(
     for category, cap in category_caps.items():
         category_weight = sum(
             weight
-            for weight, name in zip(weights, categories)
+            for weight, name in zip(weights, categories, strict=False)
             if name == category
         )
         if category_weight > float(cap) + tolerance:

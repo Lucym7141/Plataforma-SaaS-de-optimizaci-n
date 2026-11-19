@@ -27,18 +27,29 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install -r requirements-dev.txt
       - name: Install browser-test dependencies
         run: npm ci
       - name: Install Chromium
@@ -52,9 +63,15 @@ jobs:
       - name: Run tests
         working-directory: backend
         run: python manage.py test --verbosity 1
-      - name: Check frontend JavaScript
-        run: node --check frontend/app.js
+      - name: Lint Python
+        run: ruff check backend tests
+      - name: Lint JavaScript
+        run: npx eslint .
       - name: Run browser end-to-end tests
+        env:
+          # Usa Redis y un worker real para cubrir la cola asíncrona.
+          E2E_CELERY_WORKER: "true"
+          CELERY_BROKER_URL: redis://127.0.0.1:6379/0
         run: npm run test:e2e
       - name: Upload browser traces on failure
         if: failure()

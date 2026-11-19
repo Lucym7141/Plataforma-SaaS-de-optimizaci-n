@@ -49,7 +49,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-DEBUG = env_bool("DJANGO_DEBUG", True)
+# Desactivado por defecto: un despliegue sin configurar falla de forma segura.
+# manage.py lo activa para runserver y test (ver DEV_COMMANDS allí).
+DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOW_REGISTRATION = env_bool("DJANGO_ALLOW_REGISTRATION", DEBUG)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")

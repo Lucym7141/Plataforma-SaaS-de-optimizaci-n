@@ -250,7 +250,6 @@ function formatNumber(value) {
 function renderPortfolioComparisonInputs(execution) {
     const snapshot = execution.modelo_snapshot;
     const weights = document.getElementById("portfolio-comparison-weights");
-    const form = document.getElementById("portfolio-comparison-form");
     const message = document.getElementById("portfolio-comparison-message");
     const results = document.getElementById("portfolio-comparison-results");
     portfolioComparisonExecution = execution;
@@ -2531,7 +2530,7 @@ if (authTabs) {
         const currentIndex = tabs.indexOf(document.activeElement);
         if (currentIndex === -1) return;
 
-        let nextIndex = currentIndex;
+        let nextIndex;
         if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
             nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
         } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {

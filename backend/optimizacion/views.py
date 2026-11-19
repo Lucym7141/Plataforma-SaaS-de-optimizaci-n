@@ -14,7 +14,6 @@ from django.contrib.auth import update_session_auth_hash
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core import signing
-from django.db import DatabaseError, connection
 from django.db.models import Count
 from django.db import transaction
 from django.shortcuts import get_object_or_404

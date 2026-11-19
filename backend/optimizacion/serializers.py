@@ -319,7 +319,7 @@ class DatosPortafolioSerializer(serializers.Serializer):
             })
         if any(
             lower < 0 or upper > 1 or lower > upper
-            for lower, upper in zip(minimums, maximums)
+            for lower, upper in zip(minimums, maximums, strict=False)
         ):
             raise serializers.ValidationError({
                 "pesos_minimos": (
@@ -359,7 +359,7 @@ class DatosPortafolioSerializer(serializers.Serializer):
             b_eq=[1.0],
             bounds=[
                 (float(lower), float(upper))
-                for lower, upper in zip(minimums, maximums)
+                for lower, upper in zip(minimums, maximums, strict=False)
             ],
             method="highs",
         )
@@ -784,6 +784,3 @@ class ProblemaDesdeTextoSerializer(serializers.Serializer):
         max_length=6000,
         trim_whitespace=True,
     )
-
-
-from decimal import Decimal
