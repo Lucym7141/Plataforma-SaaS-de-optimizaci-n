@@ -8,7 +8,6 @@ export default defineConfig([
         ".venv/",
         "frontend/vendor/",
         "frontend/react-build/",
-        "frontend-vite/",
         "playwright-report/",
         "test-results/"
     ]),

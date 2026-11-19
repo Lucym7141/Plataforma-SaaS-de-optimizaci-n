@@ -11,6 +11,7 @@ from .models import (
     OptimizationJob,
 )
 from .portfolio import (
+    PortfolioSolverError,
     calcular_frontera_eficiente,
     optimizar_media_varianza,
 )
@@ -160,6 +161,16 @@ def run_optimization_job(job_id):
 
     try:
         result = _run_job(job)
+    except PortfolioSolverError as exc:
+        # Infactibilidad u otro problema del modelo: el mensaje explica al
+        # usuario qué revisar, así que se muestra tal cual.
+        logger.warning("El trabajo de optimización %s no tiene solución: %s", job.pk, exc)
+        _finish_job(
+            job.pk,
+            status=OptimizationJob.Status.FAILED,
+            error=str(exc),
+        )
+        return
     except Exception:
         logger.exception("El trabajo de optimización %s falló.", job.pk)
         _finish_job(

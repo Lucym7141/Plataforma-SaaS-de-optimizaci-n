@@ -157,7 +157,11 @@ cd backend
 Sirve `staticfiles` desde el proxy o un servicio de archivos estáticos; no uses
 el servidor de desarrollo en producción. Programa
 `manage.py cleanup_rate_limits` para ejecutarse diariamente y purgar los
-contadores expirados. Con el registro público cerrado, crea la primera cuenta
+contadores expirados. Programa también `manage.py cleanup_optimization_jobs`
+a diario: marca como fallidos los cálculos que quedaron colgados tras una
+caída del worker y elimina los trabajos terminados hace más de 30 días
+(`--days N` cambia el periodo). Los resultados siguen disponibles en el
+historial de cada problema y portafolio. Con el registro público cerrado, crea la primera cuenta
 administradora con `manage.py createsuperuser`; después podrás crear usuarios
 desde `/admin/`.
 El endpoint `GET /health/` comprueba conectividad con la base de datos y devuelve
