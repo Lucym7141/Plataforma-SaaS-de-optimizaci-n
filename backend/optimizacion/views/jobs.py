@@ -106,23 +106,57 @@ def _create_optimization_job(
     )
 
 
+RECENT_JOBS_LIMIT = 15
+
+
+def _job_payload(job, include_result=True):
+    if job.problem_id:
+        target = {"kind": "problem", "id": job.problem_id, "name": job.problem.nombre}
+    elif job.portfolio_id:
+        target = {
+            "kind": "portfolio",
+            "id": job.portfolio_id,
+            "name": job.portfolio.nombre,
+        }
+    else:
+        target = None
+    payload = {
+        "id": str(job.pk),
+        "type": job.job_type,
+        "status": job.status,
+        "error": job.error or None,
+        "created_at": job.created_at,
+        "started_at": job.started_at,
+        "completed_at": job.completed_at,
+        "target": target,
+        "status_url": reverse(
+            "optimizacion:optimization_job_detail",
+            kwargs={"job_id": job.pk},
+        ),
+    }
+    if include_result:
+        payload["result"] = job.result
+    return payload
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def listar_trabajos_optimizacion(request):
+    """Cálculos recientes de la cuenta, sin resultados (se piden aparte)."""
+    expire_stale_jobs(owner=request.user)
+    jobs = OptimizationJob.objects.filter(owner=request.user).select_related(
+        "problem",
+        "portfolio",
+    )[:RECENT_JOBS_LIMIT]
+    return Response([_job_payload(job, include_result=False) for job in jobs])
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def detalle_trabajo_optimizacion(request, job_id):
     job = get_object_or_404(
-        OptimizationJob,
+        OptimizationJob.objects.select_related("problem", "portfolio"),
         pk=job_id,
         owner=request.user,
     )
-    return Response(
-        {
-            "id": str(job.pk),
-            "type": job.job_type,
-            "status": job.status,
-            "error": job.error or None,
-            "created_at": job.created_at,
-            "started_at": job.started_at,
-            "completed_at": job.completed_at,
-            "result": job.result,
-        }
-    )
+    return Response(_job_payload(job))

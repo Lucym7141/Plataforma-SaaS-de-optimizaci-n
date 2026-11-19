@@ -491,6 +491,32 @@
             </div>
             </section>
         </section>
+        <section class="dashboard-section dashboard-jobs-section" data-app-page="dashboard" aria-labelledby="dashboard-jobs-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="section-label">CÁLCULOS</p>
+                    <h2 id="dashboard-jobs-title">Cálculos recientes</h2>
+                </div>
+                <span class="muted">Recupera tus resultados aunque hayas cerrado la pestaña</span>
+            </div>
+            <div class="chart-card dashboard-history-card">
+                <div class="table-scroll">
+                    <table class="dashboard-history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Cálculo</th>
+                                <th scope="col">Modelo o portafolio</th>
+                                <th scope="col">Estado</th>
+                                <th scope="col">Fecha</th>
+                                <th scope="col"><span class="job-actions-label">Acciones</span></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-jobs" aria-live="polite"></tbody>
+                    </table>
+                </div>
+                <p id="dashboard-jobs-message" class="message" role="status" hidden></p>
+            </div>
+        </section>
         <section class="app-page-heading" data-app-page="models" aria-labelledby="models-page-title">
             <p class="section-label">MODELOS DE OPTIMIZACIÓN</p>
             <h1 id="models-page-title">Tus modelos y asistente IA</h1>
