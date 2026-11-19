@@ -71,8 +71,8 @@ def _access_token(scope):
     except AzureError as error:
         raise AzureOpenAIConfigurationError(
             "No se pudo obtener credenciales de Azure. Inicia sesión con Azure "
-            "CLI en desarrollo o configura una identidad administrada en "
-            "producción."
+            "CLI en desarrollo, configura una identidad administrada si la app "
+            "corre en Azure o define AZURE_OPENAI_API_KEY en otros servidores."
         ) from error
 
 
@@ -140,7 +140,11 @@ def generar_modelo(texto):
         }
         token_scope = "https://cognitiveservices.azure.com/.default"
     headers = {"Content-Type": "application/json"}
-    headers["Authorization"] = f"Bearer {_access_token(token_scope)}"
+    api_key = settings.AZURE_OPENAI_API_KEY.strip()
+    if api_key:
+        headers["api-key"] = api_key
+    else:
+        headers["Authorization"] = f"Bearer {_access_token(token_scope)}"
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),

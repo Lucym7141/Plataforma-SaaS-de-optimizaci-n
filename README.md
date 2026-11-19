@@ -83,10 +83,18 @@ modelo automáticamente. Para habilitarlo:
    Luego inicia Django como en la sección de ejecución local. Si el servidor ya
    estaba corriendo, reinícialo para que lea la configuración.
 
-En producción, asigna una identidad administrada a la aplicación y otórgale el
-rol **Cognitive Services OpenAI User** sobre el recurso. Configura las mismas
-variables `AZURE_OPENAI_*` en el entorno del servicio; con `DEBUG=false` se
-usa la identidad administrada, sin guardar una clave de Azure. El asistente
+En producción dentro de Azure, asigna una identidad administrada a la
+aplicación y otórgale el rol **Cognitive Services OpenAI User** sobre el
+recurso. Configura las mismas variables `AZURE_OPENAI_*` en el entorno del
+servicio; con `DEBUG=false` se usa la identidad administrada, sin guardar una
+clave de Azure.
+
+Fuera de Azure (por ejemplo, con Docker en otro proveedor) no existe identidad
+administrada: define además `AZURE_OPENAI_API_KEY` con una clave del recurso
+(Azure Portal → tu recurso → *Keys and Endpoint*) en `.env`. Si la variable
+tiene valor, el asistente envía la clave en el encabezado `api-key` en lugar de
+pedir un token. Guárdala solo en `.env` o en el gestor de secretos del
+servidor, nunca en el repositorio, y rótala desde Azure si se expone. El asistente
 envía a Azure OpenAI el texto escrito por la persona, no almacena ese texto y
 requiere una acción explícita para generar. El borrador debe revisarse antes
 de guardarse o resolverlo. El límite inicial es de 5 generaciones por usuario
