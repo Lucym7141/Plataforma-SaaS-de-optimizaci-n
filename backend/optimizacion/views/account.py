@@ -27,6 +27,7 @@ from ..models import (
     OptimizacionPortafolio,
     PerfilUsuario,
 )
+from ..plans import plan_summary
 from ..serializers import (
     ProblemaOptimizacionSerializer,
     EjecucionOptimizacionSerializer,
@@ -50,6 +51,7 @@ def perfil_usuario(request):
             "nombre_visible": profile.nombre_visible,
             "descripcion": profile.descripcion,
             "foto_url": "/api/profile/photo/" if profile.foto else None,
+            "plan": plan_summary(request.user),
         })
 
     for field, max_length in (("nombre_visible", 80), ("descripcion", 240)):
@@ -129,6 +131,7 @@ def perfil_usuario(request):
         "nombre_visible": profile.nombre_visible,
         "descripcion": profile.descripcion,
         "foto_url": "/api/profile/photo/" if profile.foto else None,
+        "plan": plan_summary(request.user),
     })
 
 

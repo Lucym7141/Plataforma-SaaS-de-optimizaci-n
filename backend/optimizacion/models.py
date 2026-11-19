@@ -22,6 +22,11 @@ class PerfilUsuario(models.Model):
     nombre_visible = models.CharField(max_length=80, blank=True)
     descripcion = models.CharField(max_length=240, blank=True)
     foto = models.ImageField(upload_to=perfil_foto_upload_to, blank=True)
+    # Id de un plan de SUBSCRIPTION_PLANS; vacío o desconocido usa el primero.
+    plan = models.CharField(max_length=40, blank=True)
+    # Exime a la cuenta de todos los límites del plan (cuentas de demostración
+    # o de ventas). Solo se cambia desde el admin o `manage.py asignar_plan`.
+    sin_limites = models.BooleanField(default=False)
     actualizado_en = models.DateTimeField(auto_now=True)
 
     def __str__(self):

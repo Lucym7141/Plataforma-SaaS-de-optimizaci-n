@@ -833,6 +833,51 @@ function renderUserProfile(profile, username) {
     document.getElementById("profile-description").value =
         profile.descripcion || "";
     updateProfileFormState();
+    renderPlanSummary(profile.plan);
+}
+
+function describePlanUsage(used, limit, singular, plural) {
+    if (limit === null || limit === undefined) {
+        return `${used} ${used === 1 ? singular : plural} · sin límite`;
+    }
+    return `${used} de ${limit} ${limit === 1 ? singular : plural}`;
+}
+
+function renderPlanSummary(plan) {
+    const section = document.getElementById("profile-plan");
+    if (!plan) {
+        section.hidden = true;
+        return;
+    }
+    document.getElementById("profile-plan-name").textContent = plan.unlimited
+        ? `${plan.name} · Sin límites`
+        : plan.name;
+    const usage = document.getElementById("profile-plan-usage");
+    usage.replaceChildren();
+    const rows = [
+        describePlanUsage(plan.usage.models, plan.limits.models,
+            "modelo", "modelos"),
+        describePlanUsage(plan.usage.portfolios, plan.limits.portfolios,
+            "portafolio", "portafolios"),
+        plan.limits.assets_per_portfolio === null
+            ? "Activos por portafolio: sin límite"
+            : `Hasta ${plan.limits.assets_per_portfolio} activos por portafolio`
+    ];
+    rows.forEach((text) => {
+        const item = document.createElement("li");
+        item.textContent = text;
+        usage.append(item);
+    });
+    section.hidden = false;
+}
+
+async function refreshPlanSummary() {
+    try {
+        const profile = await requestJSON(`${API_URL}/profile/`);
+        if (!appContent.hidden) renderPlanSummary(profile.plan);
+    } catch {
+        // El resumen del plan es informativo; un fallo aquí no bloquea nada.
+    }
 }
 
 async function loadUserProfile(username) {
@@ -1549,6 +1594,7 @@ function invalidateDashboard() {
 
 function refreshDashboardAfterMutation() {
     invalidateDashboard();
+    refreshPlanSummary();
     return loadDashboard({ force: true });
 }
 

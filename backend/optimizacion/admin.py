@@ -1,4 +1,6 @@
 
+from django import forms
+from django.conf import settings
 from django.contrib import admin
 
 from .models import (
@@ -9,6 +11,7 @@ from .models import (
     TerminoRestriccion,
     EjecucionOptimizacion,
     ValorSolucion,
+    PerfilUsuario,
 )
 
 
@@ -102,3 +105,34 @@ class EjecucionOptimizacionAdmin(admin.ModelAdmin):
 @admin.register(ValorSolucion)
 class ValorSolucionAdmin(admin.ModelAdmin):
     list_display = ("ejecucion", "variable", "valor")
+
+
+class PerfilUsuarioForm(forms.ModelForm):
+    plan = forms.ChoiceField(required=False)
+
+    class Meta:
+        model = PerfilUsuario
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["plan"].choices = [("", "Plan por defecto")] + [
+            (plan["id"], plan["name"]) for plan in settings.SUBSCRIPTION_PLANS
+        ]
+
+
+@admin.register(PerfilUsuario)
+class PerfilUsuarioAdmin(admin.ModelAdmin):
+    form = PerfilUsuarioForm
+    list_display = ("usuario", "plan", "sin_limites", "actualizado_en")
+    list_filter = ("plan", "sin_limites")
+    search_fields = ("usuario__username", "usuario__email", "nombre_visible")
+    fields = (
+        "usuario",
+        "plan",
+        "sin_limites",
+        "nombre_visible",
+        "descripcion",
+        "foto",
+    )
+    raw_id_fields = ("usuario",)

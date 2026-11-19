@@ -1,6 +1,5 @@
 """Páginas HTML y planes públicos."""
 
-
 from django.conf import settings
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.shortcuts import render

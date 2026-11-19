@@ -120,7 +120,7 @@ test("premium button opens the public informative plans in a new tab", async ({ 
     await expect(pricing.locator(".pricing-card").nth(2))
         .toContainText(/10[.,]50/);
     await expect(pricing).toContainText(
-        "no procesa pagos, activa suscripciones ni aplica los límites"
+        "aún no procesa pagos ni activa suscripciones"
     );
     await expect(pricing.locator(".pricing-card").nth(1))
         .toContainText("Profesional");
@@ -604,6 +604,9 @@ test("sidebar navigation works as a keyboard-accessible mobile drawer", async ({
     await profileTrigger.click();
     await expect(page.getByRole("dialog", { name: "Mi perfil" })).toBeVisible();
     await expect(page.locator("#profile-drawer-close")).toBeFocused();
+    // La cuenta E2E está exenta de límites (ver seed_user.py).
+    await expect(page.locator("#profile-plan-name")).toHaveText("Inicial · Sin límites");
+    await expect(page.locator("#profile-plan-usage")).toContainText("sin límite");
     expect(page.url()).toBe(currentUrl);
     expect(await page.evaluate(() => window.scrollY)).toBe(currentScroll);
     await page.keyboard.press("Escape");
@@ -686,13 +689,16 @@ test("dashboard cards use subtle motion and disable it for reduced-motion prefer
 
 test("dashboard pie charts animate and respect motion preferences", async ({ page }) => {
     await signIn(page);
+    // El panel crea (y recrea) los gráficos de forma asíncrona; mientras no
+    // existan se devuelve null para que expect.poll vuelva a intentarlo.
     const chartMotion = () => page.evaluate(() => {
-        const objectives = window.Chart.getChart(
+        const objectives = window.Chart?.getChart(
             document.getElementById("chart-problemas")
         );
-        const portfolios = window.Chart.getChart(
+        const portfolios = window.Chart?.getChart(
             document.getElementById("chart-portafolios")
         );
+        if (!objectives || !portfolios) return null;
         return {
             objectivesType: objectives.config.type,
             objectivesDuration: objectives.options.animation.duration,
@@ -714,14 +720,14 @@ test("dashboard pie charts animate and respect motion preferences", async ({ pag
 
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect.poll(() => page.evaluate(() =>
-        window.Chart.getChart(
+        window.Chart?.getChart(
             document.getElementById("chart-problemas")
-        ).options.animation === false
+        )?.options.animation === false
     )).toBe(true);
     await expect.poll(() => page.evaluate(() =>
-        window.Chart.getChart(
+        window.Chart?.getChart(
             document.getElementById("chart-portafolios")
-        ).options.animation === false
+        )?.options.animation === false
     )).toBe(true);
 
     await page.emulateMedia({ reducedMotion: "no-preference" });

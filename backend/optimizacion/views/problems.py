@@ -3,6 +3,7 @@
 import json
 import logging
 
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import (
@@ -24,6 +25,7 @@ from ..serializers import (
     ProblemaDesdeTextoSerializer,
     EjecucionOptimizacionSerializer,
 )
+from ..plans import PlanLimitError, check_can_add, lock_account, plan_limit_response
 from ..reporting import build_problem_report
 from ..ai_modeling import (
     AzureOpenAIConfigurationError,
@@ -53,7 +55,13 @@ def listar_problemas(request):
         )
 
         if serializer.is_valid():
-            problema = serializer.save()
+            try:
+                with transaction.atomic():
+                    lock_account(request.user)
+                    check_can_add(request.user, "models")
+                    problema = serializer.save()
+            except PlanLimitError as error:
+                return plan_limit_response(error)
 
             respuesta = ProblemaOptimizacionSerializer(problema)
 
@@ -269,8 +277,14 @@ def restaurar_problema(request, problema_id):
         propietario=request.user,
         archivado=True,
     )
-    problema.archivado = False
-    problema.save(update_fields=["archivado", "actualizado_en"])
+    try:
+        with transaction.atomic():
+            lock_account(request.user)
+            check_can_add(request.user, "models")
+            problema.archivado = False
+            problema.save(update_fields=["archivado", "actualizado_en"])
+    except PlanLimitError as error:
+        return plan_limit_response(error)
     return Response(ProblemaOptimizacionSerializer(problema).data)
 
 
@@ -289,8 +303,14 @@ def duplicar_problema(request, problema_id):
         data=datos,
         context={"request": request},
     )
-    serializer.is_valid(raise_exception=True)
-    copia = serializer.save()
+    try:
+        with transaction.atomic():
+            lock_account(request.user)
+            check_can_add(request.user, "models")
+            serializer.is_valid(raise_exception=True)
+            copia = serializer.save()
+    except PlanLimitError as error:
+        return plan_limit_response(error)
     return Response(
         ProblemaOptimizacionSerializer(copia).data,
         status=status.HTTP_201_CREATED,
