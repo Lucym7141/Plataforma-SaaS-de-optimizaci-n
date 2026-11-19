@@ -689,13 +689,16 @@ test("dashboard cards use subtle motion and disable it for reduced-motion prefer
 
 test("dashboard pie charts animate and respect motion preferences", async ({ page }) => {
     await signIn(page);
+    // El panel crea (y recrea) los gráficos de forma asíncrona; mientras no
+    // existan se devuelve null para que expect.poll vuelva a intentarlo.
     const chartMotion = () => page.evaluate(() => {
-        const objectives = window.Chart.getChart(
+        const objectives = window.Chart?.getChart(
             document.getElementById("chart-problemas")
         );
-        const portfolios = window.Chart.getChart(
+        const portfolios = window.Chart?.getChart(
             document.getElementById("chart-portafolios")
         );
+        if (!objectives || !portfolios) return null;
         return {
             objectivesType: objectives.config.type,
             objectivesDuration: objectives.options.animation.duration,
@@ -717,14 +720,14 @@ test("dashboard pie charts animate and respect motion preferences", async ({ pag
 
     await page.emulateMedia({ reducedMotion: "reduce" });
     await expect.poll(() => page.evaluate(() =>
-        window.Chart.getChart(
+        window.Chart?.getChart(
             document.getElementById("chart-problemas")
-        ).options.animation === false
+        )?.options.animation === false
     )).toBe(true);
     await expect.poll(() => page.evaluate(() =>
-        window.Chart.getChart(
+        window.Chart?.getChart(
             document.getElementById("chart-portafolios")
-        ).options.animation === false
+        )?.options.animation === false
     )).toBe(true);
 
     await page.emulateMedia({ reducedMotion: "no-preference" });
