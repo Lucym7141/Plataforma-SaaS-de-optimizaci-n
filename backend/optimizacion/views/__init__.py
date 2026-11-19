@@ -35,6 +35,7 @@ from .problems import (  # noqa: F401
     historial_problema,
 )
 from .portfolios import (  # noqa: F401
+    generar_portafolio_desde_texto,
     listar_portafolios,
     previsualizar_importacion_portafolio,
     detalle_portafolio,

@@ -600,6 +600,18 @@
                 <p id="portfolio-import-message" class="message" role="status" hidden></p>
                 <div id="portfolio-import-preview" class="solution-values" hidden></div>
             </details>
+            <details class="portfolio-ai">
+                <summary>Crear portafolio con IA a partir de una descripción</summary>
+                <p class="muted">Describe cada activo con su rendimiento esperado y su riesgo (volatilidad y correlaciones, o la covarianza). La IA solo ordena los datos que escribas: no los completa con datos de mercado ni recomienda activos. Usa una consulta de IA de tu plan.</p>
+                <p class="muted">Al generar, el texto se envía a Azure OpenAI. Nada se guarda hasta que revises el formulario y pulses «Guardar portafolio».</p>
+                <form id="portfolio-ai-form" class="portfolio-form">
+                    <label for="portfolio-ai-description">Descripción del portafolio</label>
+                    <textarea id="portfolio-ai-description" name="texto" rows="5" minlength="20" maxlength="6000" required placeholder="Ejemplo: Bonos con rendimiento esperado de 6 % anual y volatilidad de 5 %; Acciones con 10 % y volatilidad de 20 %; correlación entre ambos de 0,3. Máximo 70 % en acciones."></textarea>
+                    <button class="secondary-button" type="submit">Generar borrador con IA</button>
+                </form>
+                <p id="portfolio-ai-message" class="message" role="status" hidden></p>
+                <ul id="portfolio-ai-notes" class="portfolio-ai-notes" hidden></ul>
+            </details>
             <form id="portfolio-form" class="portfolio-form">
                 <label for="portfolio-name">Nombre</label>
                 <input id="portfolio-name" name="nombre" maxlength="150" required>

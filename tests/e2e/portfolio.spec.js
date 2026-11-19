@@ -1380,3 +1380,69 @@ test("solved models can be explained with AI", async ({ page }) => {
     expect(explainCalls).toBe(1);
     expect(created.id).toBeTruthy();
 });
+
+test("portfolio drafts from a description fill the form and report missing data", async ({ page }) => {
+    await signIn(page);
+    await openView(page, "#portfolio-panel", "analysis");
+    const name = `E2E IA portafolio ${Date.now()}`;
+    let attempt = 0;
+    // Azure no está disponible en las pruebas: se simula su respuesta.
+    await page.route("**/api/portafolios/generar/", async (route) => {
+        attempt += 1;
+        if (attempt === 1) {
+            await route.fulfill({
+                status: 422,
+                contentType: "application/json",
+                body: JSON.stringify({
+                    detail: "Faltan datos para armar el portafolio.",
+                    faltantes: ["Rendimiento esperado de Acciones."]
+                })
+            });
+            return;
+        }
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify({
+                borrador: {
+                    nombre: name,
+                    activos: ["Bonos", "Acciones"],
+                    categorias: ["Renta fija", "Renta variable"],
+                    rendimientos_esperados: [0.06, 0.1],
+                    covarianza: [[0.0025, 0.003], [0.003, 0.04]],
+                    aversion_riesgo: 3,
+                    periodos_por_anio: 1,
+                    pesos_minimos: [0, 0],
+                    pesos_maximos: [1, 0.7],
+                    limites_categoria: { "Renta variable": 0.7 },
+                    escenarios_estres: {}
+                },
+                supuestos: ["La covarianza se calculó a partir de las volatilidades y correlaciones indicadas."]
+            })
+        });
+    });
+
+    const assistant = page.locator("details.portfolio-ai");
+    await assistant.locator("summary").click();
+    await page.locator("#portfolio-ai-description").fill(
+        "Bonos rinden 6 % con volatilidad 5 %; Acciones con volatilidad 20 %."
+    );
+    await assistant.getByRole("button", { name: "Generar borrador con IA" }).click();
+    await expect(page.locator("#portfolio-ai-message"))
+        .toContainText("Faltan datos para armar el portafolio.");
+    await expect(page.locator("#portfolio-ai-notes"))
+        .toContainText("Rendimiento esperado de Acciones.");
+
+    await assistant.getByRole("button", { name: "Generar borrador con IA" }).click();
+    await expect(page.locator("#portfolio-ai-message")).toContainText("Borrador cargado");
+    await expect(page.locator("#portfolio-ai-notes")).toContainText("covarianza se calculó");
+    await expect(page.locator("#portfolio-name")).toHaveValue(name);
+    await expect(page.locator("#portfolio-assets")).toHaveValue("Bonos, Acciones");
+    await expect(page.locator("#portfolio-covariance"))
+        .toHaveValue("[[0.0025,0.003],[0.003,0.04]]");
+
+    await page.locator("#portfolio-form")
+        .getByRole("button", { name: "Guardar portafolio" }).click();
+    await expect(page.locator("#portfolio-message")).toContainText("Portafolio guardado.");
+    await expect(page.locator(".portfolio-card").filter({ hasText: name })).toBeVisible();
+});

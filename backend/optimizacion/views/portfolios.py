@@ -1,5 +1,8 @@
 """API de portafolios de inversión."""
 
+import json
+import logging
+
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
@@ -11,31 +14,44 @@ from rest_framework.decorators import (
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from ..ai_modeling import (
+    AzureOpenAIConfigurationError,
+    AzureOpenAIServiceError,
+    generar_portafolio,
+)
 from ..models import (
+    UsoIA,
     EjecucionPortafolio,
     OptimizacionPortafolio,
     OptimizationJob,
 )
 from ..serializers import (
+    ProblemaDesdeTextoSerializer,
     DatosPortafolioSerializer,
     OptimizacionPortafolioSerializer,
     EjecucionPortafolioSerializer,
 )
 from ..plans import (
     PlanLimitError,
+    check_ai_quota,
     check_asset_count,
     check_can_add,
     lock_account,
     plan_limit_response,
+    record_ai_use,
 )
+from ..portfolio_drafts import BorradorIncompleto, BorradorInvalido, construir_borrador
 from ..portfolio_import import preview_portfolio_csv
 from ..reporting import build_portfolio_report
 from ..throttles import (
+    GenerarModeloRateThrottle,
     ResolverRateThrottle,
 )
 
 from .common import _execution_report_response
 from .jobs import _active_job_exists, _create_optimization_job
+
+logger = logging.getLogger(__name__)
 
 
 def _portfolio_values(validated_data):
@@ -293,3 +309,85 @@ def restaurar_portafolio(request, portafolio_id):
     except PlanLimitError as error:
         return plan_limit_response(error)
     return Response(OptimizacionPortafolioSerializer(item).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([GenerarModeloRateThrottle])
+def generar_portafolio_desde_texto(request):
+    """Arma un borrador de portafolio editable a partir de una descripción.
+
+    No guarda nada: la persona revisa el borrador en el formulario y lo
+    guarda con la creación normal, que aplica los límites del plan."""
+    solicitud = ProblemaDesdeTextoSerializer(data=request.data)
+    if not solicitud.is_valid():
+        return Response(solicitud.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        check_ai_quota(request.user)
+    except PlanLimitError as error:
+        return plan_limit_response(error)
+
+    try:
+        respuesta_ia = generar_portafolio(solicitud.validated_data["texto"])
+    except AzureOpenAIConfigurationError as error:
+        return Response(
+            {"detail": str(error)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except AzureOpenAIServiceError:
+        logger.exception("Azure OpenAI no pudo generar un portafolio.")
+        return Response(
+            {
+                "detail": (
+                    "No se pudo generar el borrador con Azure OpenAI. "
+                    "Vuelve a intentarlo en unos minutos."
+                )
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    # La consulta ya se hizo: cuenta para la cuota aunque falten datos.
+    record_ai_use(request.user, UsoIA.Tipo.BORRADOR)
+
+    try:
+        payload, supuestos = construir_borrador(json.loads(respuesta_ia))
+    except BorradorIncompleto as error:
+        return Response(
+            {
+                "detail": (
+                    "Faltan datos para armar el portafolio. Agrégalos a la "
+                    "descripción y vuelve a intentarlo."
+                ),
+                "faltantes": error.faltantes,
+            },
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    except (json.JSONDecodeError, TypeError, BorradorInvalido):
+        logger.warning("Azure OpenAI devolvió un portafolio con formato inválido.")
+        return Response(
+            {
+                "detail": (
+                    "La respuesta de IA no tuvo un formato válido. Reformula "
+                    "la descripción e inténtalo de nuevo."
+                )
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    validacion = DatosPortafolioSerializer(data=payload)
+    if not validacion.is_valid():
+        return Response(
+            {
+                "detail": (
+                    "Los datos descritos no forman un portafolio válido. "
+                    "Revisa los valores y vuelve a intentarlo."
+                ),
+                "errores": validacion.errors,
+            },
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    try:
+        check_asset_count(request.user, len(payload["activos"]))
+    except PlanLimitError as error:
+        return plan_limit_response(error)
+    return Response({"borrador": payload, "supuestos": supuestos})

@@ -88,6 +88,7 @@ async function requestJSON(url, options = {}) {
                 : `La solicitud falló con el código ${response.status}.`;
         const error = new Error(message);
         error.status = response.status;
+        error.data = data;
         throw error;
     }
 
@@ -2073,6 +2074,62 @@ document.getElementById("portfolio-form").addEventListener("submit", async (even
             ? "Revisa que rendimientos y covarianza sean JSON válido."
             : error.message;
         message.hidden = false;
+    }
+});
+
+function showPortfolioAiNotes(title, items) {
+    const notes = document.getElementById("portfolio-ai-notes");
+    notes.replaceChildren();
+    if (!Array.isArray(items) || !items.length) {
+        notes.hidden = true;
+        return;
+    }
+    const heading = document.createElement("li");
+    heading.className = "portfolio-ai-notes-title";
+    heading.textContent = title;
+    notes.append(heading);
+    items.forEach((text) => {
+        const item = document.createElement("li");
+        item.textContent = text;
+        notes.append(item);
+    });
+    notes.hidden = false;
+}
+
+document.getElementById("portfolio-ai-form").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const button = form.querySelector("button[type='submit']");
+    const message = document.getElementById("portfolio-ai-message");
+    button.disabled = true;
+    button.textContent = "Generando borrador...";
+    message.hidden = true;
+    showPortfolioAiNotes("", []);
+    try {
+        const result = await requestJSON(`${API_URL}/portafolios/generar/`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ texto: form.elements.texto.value.trim() })
+        });
+        resetPortfolioForm();
+        fillPortfolioForm(result.borrador);
+        message.textContent = "Borrador cargado en el formulario. Revisa cada valor y pulsa «Guardar portafolio».";
+        message.classList.remove("error-message");
+        message.hidden = false;
+        showPortfolioAiNotes("Supuestos que conviene revisar:", result.supuestos);
+        document.getElementById("portfolio-form").scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    } catch (error) {
+        message.textContent = `No se pudo generar el borrador: ${error.message}`;
+        message.classList.add("error-message");
+        message.hidden = false;
+        showPortfolioAiNotes("Datos que faltan en la descripción:", error.data?.faltantes);
+    } finally {
+        button.disabled = false;
+        button.textContent = "Generar borrador con IA";
+        refreshPlanSummary();
     }
 });
 
