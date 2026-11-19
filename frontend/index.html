@@ -642,6 +642,15 @@
                 </div>
                 <p class="message" data-report-message="portfolio" role="status" hidden></p>
                 <div id="portfolio-result-values" class="solution-values"></div>
+                <section class="ai-explanation" data-explanation-section="portfolio">
+                    <div class="ai-explanation-heading">
+                        <h3>Explicación con IA</h3>
+                        <button class="secondary-button" type="button" data-explain-target="portfolio">Explicar con IA</button>
+                    </div>
+                    <p class="muted ai-explanation-intro">Resume cómo se reparten el peso y el riesgo según tus supuestos. No es asesoría financiera. Usa una consulta de IA de tu plan; una vez generada queda guardada.</p>
+                    <p class="message" data-explanation-message="portfolio" role="status" hidden></p>
+                    <div class="ai-explanation-body" data-explanation-body="portfolio" aria-live="polite" hidden></div>
+                </section>
                 <section id="portfolio-comparison" class="portfolio-comparison" hidden>
                     <h4>Escenario actual vs. óptimo</h4>
                     <p class="muted">
@@ -758,6 +767,15 @@
                             <button class="secondary-button" type="button" data-report-format="xlsx" data-report-target="problem">Descargar Excel</button>
                         </div>
                         <p class="message" data-report-message="problem" role="status" hidden></p>
+                        <section class="ai-explanation" data-explanation-section="problem">
+                            <div class="ai-explanation-heading">
+                                <h3>Explicación con IA</h3>
+                                <button class="secondary-button" type="button" data-explain-target="problem">Explicar con IA</button>
+                            </div>
+                            <p class="muted ai-explanation-intro">Resume en lenguaje sencillo qué restricciones limitan el resultado y qué revisar. Usa una consulta de IA de tu plan; una vez generada queda guardada.</p>
+                            <p class="message" data-explanation-message="problem" role="status" hidden></p>
+                            <div class="ai-explanation-body" data-explanation-body="problem" aria-live="polite" hidden></div>
+                        </section>
                     </section>
                     <section id="problem-history" class="results-section" hidden>
                         <h3>Historial de ejecuciones</h3>

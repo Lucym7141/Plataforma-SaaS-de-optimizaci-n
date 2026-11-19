@@ -264,8 +264,21 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
 
         mensaje = f"Estado informado por PuLP: {estado_pulp}."
 
+        # En modelos enteros, CBC se detiene con "GapLimit" cuando la solución
+        # ya está dentro de la tolerancia de optimalidad: es una solución
+        # óptima válida, no un error.
+        if estado_pulp == "GapLimit" and getattr(
+            estadisticas, "has_solution", False
+        ):
+            estado = EjecucionOptimizacion.Estado.OPTIMO
+            mensaje = (
+                "Solución óptima dentro de la tolerancia de optimalidad del "
+                "solucionador (PuLP: GapLimit)."
+            )
+
         valor_objetivo = None
         valores_guardar = []
+        analisis_restricciones = []
 
         # Solo almacenar una solución cuando PuLP informa óptimo.
         if estado == EjecucionOptimizacion.Estado.OPTIMO:
@@ -299,6 +312,21 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
                     )
                 )
 
+            # Los precios sombra solo tienen sentido en modelos continuos;
+            # con variables enteras o binarias CBC informa los de la última
+            # relajación, que no describen la solución entera.
+            es_continuo = all(
+                variable_db.tipo == VariableDecision.TipoVariable.CONTINUA
+                for variable_db in variables_db
+            )
+            analisis_restricciones = _analizar_restricciones(
+                modelo,
+                restricciones_db,
+                variables,
+                incluir_precios_sombra=es_continuo,
+                maximizar=sentido == pulp.LpMaximize,
+            )
+
         # Guardar el resultado de forma atómica.
         with transaction.atomic():
             if valores_guardar:
@@ -312,6 +340,7 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
                 "variables": len(variables_db),
                 "restricciones": len(restricciones_db),
                 "terminos_objetivo": len(terminos_objetivo),
+                "restricciones_analisis": analisis_restricciones,
             }
             ejecucion.finalizada_en = timezone.now()
             ejecucion.save()
@@ -330,3 +359,51 @@ def resolver_problema(problema_id: int) -> EjecucionOptimizacion:
         ejecucion.save()
 
     return ejecucion
+
+
+def _analizar_restricciones(
+    modelo,
+    restricciones_db,
+    variables,
+    incluir_precios_sombra,
+    maximizar,
+):
+    """Holgura, actividad y precio sombra de cada restricción en la solución.
+
+    El precio sombra es cuánto cambia el valor objetivo por cada unidad que
+    aumenta el lado derecho. CBC minimiza internamente, así que en problemas
+    de maximización su signo se invierte para conservar ese significado.
+    """
+    analisis = []
+    for restriccion_db in restricciones_db:
+        lado_izquierdo = sum(
+            float(termino.coeficiente)
+            * float(variables[termino.variable_id].varValue or 0)
+            for termino in restriccion_db.terminos.all()
+        )
+        lado_derecho = float(restriccion_db.lado_derecho)
+        if restriccion_db.operador == Restriccion.Operador.MENOR_IGUAL:
+            holgura = lado_derecho - lado_izquierdo
+        elif restriccion_db.operador == Restriccion.Operador.MAYOR_IGUAL:
+            holgura = lado_izquierdo - lado_derecho
+        else:
+            holgura = abs(lado_izquierdo - lado_derecho)
+        tolerancia = 1e-6 * max(1.0, abs(lado_derecho))
+        if abs(holgura) <= tolerancia:
+            holgura = 0.0
+        precio_sombra = None
+        if incluir_precios_sombra:
+            pi = modelo.get_constraint_by_name(f"r_{restriccion_db.pk}").pi
+            if pi is not None:
+                pi = -pi if maximizar else pi
+                precio_sombra = 0.0 if abs(pi) <= 1e-9 else float(pi)
+        analisis.append({
+            "nombre": restriccion_db.nombre,
+            "operador": restriccion_db.operador,
+            "lado_izquierdo": round(lado_izquierdo, 10),
+            "lado_derecho": lado_derecho,
+            "holgura": round(holgura, 10),
+            "activa": holgura == 0.0,
+            "precio_sombra": precio_sombra,
+        })
+    return analisis

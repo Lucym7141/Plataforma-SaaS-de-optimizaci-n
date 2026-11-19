@@ -144,4 +144,14 @@ urlpatterns = [
         views.reporte_ejecucion_portafolio,
         name="reporte_ejecucion_portafolio",
     ),
+    path(
+        "problemas/<int:problema_id>/ejecuciones/<int:ejecucion_id>/explicar/",
+        views.explicar_ejecucion_problema,
+        name="explicar_ejecucion_problema",
+    ),
+    path(
+        "portafolios/<int:portafolio_id>/ejecuciones/<int:ejecucion_id>/explicar/",
+        views.explicar_ejecucion_portafolio,
+        name="explicar_ejecucion_portafolio",
+    ),
 ]

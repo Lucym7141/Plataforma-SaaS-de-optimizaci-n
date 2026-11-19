@@ -15,6 +15,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from ..models import (
+    UsoIA,
     EjecucionOptimizacion,
     ProblemaOptimizacion,
     OptimizationJob,
@@ -25,7 +26,14 @@ from ..serializers import (
     ProblemaDesdeTextoSerializer,
     EjecucionOptimizacionSerializer,
 )
-from ..plans import PlanLimitError, check_can_add, lock_account, plan_limit_response
+from ..plans import (
+    PlanLimitError,
+    check_ai_quota,
+    check_can_add,
+    lock_account,
+    plan_limit_response,
+    record_ai_use,
+)
 from ..reporting import build_problem_report
 from ..ai_modeling import (
     AzureOpenAIConfigurationError,
@@ -99,6 +107,11 @@ def generar_problema_desde_texto(request):
         )
 
     try:
+        check_ai_quota(request.user)
+    except PlanLimitError as error:
+        return plan_limit_response(error)
+
+    try:
         respuesta_ia = generar_modelo(solicitud.validated_data["texto"])
     except AzureOpenAIConfigurationError as error:
         return Response(
@@ -148,6 +161,7 @@ def generar_problema_desde_texto(request):
             },
             status=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
+    record_ai_use(request.user, UsoIA.Tipo.BORRADOR)
     return Response(validacion.validated_data)
 
 

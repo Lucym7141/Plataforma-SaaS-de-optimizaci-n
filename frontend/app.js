@@ -120,6 +120,99 @@ async function waitForOptimizationJob(submission, onUpdate = () => {}) {
     );
 }
 
+const EXPLAINABLE_STATUSES = new Set(["OPT", "INF", "UNB", "TIME"]);
+
+function explanationElements(target) {
+    return {
+        section: document.querySelector(`[data-explanation-section="${target}"]`),
+        button: document.querySelector(`[data-explain-target="${target}"]`),
+        message: document.querySelector(`[data-explanation-message="${target}"]`),
+        body: document.querySelector(`[data-explanation-body="${target}"]`)
+    };
+}
+
+function renderExplanation(target, explanation) {
+    const { button, message, body } = explanationElements(target);
+    body.replaceChildren();
+    const summary = document.createElement("p");
+    summary.className = "ai-explanation-summary";
+    summary.textContent = explanation.resumen;
+    body.append(summary);
+    [
+        ["Puntos clave", explanation.puntos_clave],
+        ["Qué revisar en el modelo", explanation.sugerencias]
+    ].forEach(([title, items]) => {
+        if (!Array.isArray(items) || !items.length) return;
+        const heading = document.createElement("h4");
+        heading.textContent = title;
+        const list = document.createElement("ul");
+        items.forEach((text) => {
+            const item = document.createElement("li");
+            item.textContent = text;
+            list.append(item);
+        });
+        body.append(heading, list);
+    });
+    const note = document.createElement("p");
+    note.className = "ai-explanation-note";
+    note.textContent = target === "portfolio"
+        ? "Generado con IA a partir de los resultados calculados. No es asesoría financiera: depende por completo de los supuestos que ingresaste."
+        : "Generado con IA a partir de los resultados calculados. Revísalo antes de tomar decisiones.";
+    body.append(note);
+    body.hidden = false;
+    message.hidden = true;
+    button.hidden = true;
+}
+
+function resetExplanation(target, result) {
+    const { section, button, message, body } = explanationElements(target);
+    section.hidden = target === "problem" && !EXPLAINABLE_STATUSES.has(result?.estado);
+    button.hidden = false;
+    button.disabled = false;
+    button.textContent = "Explicar con IA";
+    message.hidden = true;
+    body.hidden = true;
+    body.replaceChildren();
+    if (result?.explicacion_ia) renderExplanation(target, result.explicacion_ia);
+}
+
+async function requestExplanation(target) {
+    const { button, message } = explanationElements(target);
+    const [segment, parentId, executionId] = target === "problem"
+        ? ["problemas", selectedProblemId, lastProblemExecutionId]
+        : ["portafolios", selectedPortfolioId, lastPortfolioExecutionId];
+    if (parentId === null || executionId === null) {
+        message.textContent = "Primero obtén un resultado para explicar.";
+        message.classList.add("error-message");
+        message.hidden = false;
+        return;
+    }
+    button.disabled = true;
+    button.textContent = "Generando explicación...";
+    message.hidden = true;
+    try {
+        const explanation = await requestJSON(
+            `${API_URL}/${segment}/${encodeURIComponent(parentId)}/ejecuciones/${encodeURIComponent(executionId)}/explicar/`,
+            { method: "POST" }
+        );
+        renderExplanation(target, explanation);
+        refreshPlanSummary();
+    } catch (error) {
+        message.textContent = `No se pudo explicar el resultado: ${error.message}`;
+        message.classList.add("error-message");
+        message.hidden = false;
+    } finally {
+        button.disabled = false;
+        button.textContent = "Explicar con IA";
+    }
+}
+
+document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-explain-target]");
+    if (!button) return;
+    requestExplanation(button.dataset.explainTarget);
+});
+
 const JOB_TYPE_LABELS = {
     problem: "Resolver modelo",
     portfolio: "Optimizar portafolio",
@@ -975,7 +1068,10 @@ function renderPlanSummary(plan) {
             "portafolio", "portafolios"),
         plan.limits.assets_per_portfolio === null
             ? "Activos por portafolio: sin límite"
-            : `Hasta ${plan.limits.assets_per_portfolio} activos por portafolio`
+            : `Hasta ${plan.limits.assets_per_portfolio} activos por portafolio`,
+        describePlanUsage(plan.usage.ai_requests_this_month,
+            plan.limits.ai_requests_per_month,
+            "consulta de IA este mes", "consultas de IA este mes")
     ];
     rows.forEach((text) => {
         const item = document.createElement("li");
@@ -1834,6 +1930,7 @@ async function loadPortfolios() {
 async function renderPortfolioResult(result, id) {
     selectedPortfolioId = id;
     lastPortfolioExecutionId = result.id;
+    resetExplanation("portfolio", result);
     document.getElementById("portfolio-result-values").innerHTML = `
         <div class="solution-card"><span>Rendimiento esperado</span><strong>${formatNumber(result.rendimientos_portafolio)}</strong></div>
         <div class="solution-card"><span>Volatilidad</span><strong>${formatNumber(result.volatilidad_portafolio)}</strong></div>
@@ -2293,6 +2390,7 @@ function renderProblemResult(result) {
     const status = result.estado;
     const isOptimal = status === "OPT";
     lastProblemExecutionId = result.id;
+    resetExplanation("problem", result);
 
     document.getElementById("result-status").textContent =
         getStatusLabel(status);
