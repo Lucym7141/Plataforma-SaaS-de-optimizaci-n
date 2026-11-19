@@ -289,6 +289,10 @@ test("CSV import can be reviewed, optimized, and plotted", async ({ page }) => {
     await expect(card).toContainText("Treasury, Equity");
 
     await card.getByRole("button", { name: "Editar" }).click();
+    // El formulario se rellena al llegar el portafolio; escribir antes haría
+    // que esa carga sobrescriba los escenarios con {}.
+    await expect(page.locator("#portfolio-form")
+        .getByRole("button", { name: "Guardar cambios" })).toBeVisible();
     await page.locator("#portfolio-stress").fill(
         '{"Recesión": [-0.15, -0.30]}'
     );
@@ -1082,11 +1086,15 @@ test("user can load and create a model from the template library", async ({ page
     const solveResponse = await solvePromise;
     expect(solveResponse.status()).toBe(202);
     const submission = await solveResponse.json();
-    const solutionJob = await page.evaluate(async (statusUrl) => {
-        const response = await fetch(statusUrl);
-        return response.json();
-    }, submission.status_url);
-    expect(solutionJob.status).toBe("completed");
+    // Con un worker real el trabajo puede seguir en cola unos instantes.
+    let solutionJob;
+    await expect.poll(async () => {
+        solutionJob = await page.evaluate(async (statusUrl) => {
+            const response = await fetch(statusUrl);
+            return response.json();
+        }, submission.status_url);
+        return solutionJob.status;
+    }, { timeout: 30_000 }).toBe("completed");
     const solution = solutionJob.result;
     expect(solution.estado).toBe("OPT");
     expect(Number(solution.valor_objetivo)).toBeCloseTo(953333.33, 1);
