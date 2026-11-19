@@ -97,20 +97,134 @@ async function requestJSON(url, options = {}) {
 async function waitForOptimizationJob(submission, onUpdate = () => {}) {
     const deadline = Date.now() + 16 * 60 * 1000;
     let delay = 750;
+    loadRecentJobs();
 
-    while (Date.now() < deadline) {
-        const job = await requestJSON(submission.status_url);
-        if (job.status === "completed") return job.result;
-        if (job.status === "failed") {
-            throw new Error(job.error || "El cálculo no pudo completarse.");
+    try {
+        while (Date.now() < deadline) {
+            const job = await requestJSON(submission.status_url);
+            if (job.status === "completed") return job.result;
+            if (job.status === "failed") {
+                throw new Error(job.error || "El cálculo no pudo completarse.");
+            }
+
+            onUpdate(job.status);
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            delay = Math.min(Math.round(delay * 1.5), 2500);
         }
-
-        onUpdate(job.status);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        delay = Math.min(Math.round(delay * 1.5), 2500);
+    } finally {
+        loadRecentJobs();
     }
 
-    throw new Error("El cálculo sigue en proceso. Consulta el historial más tarde.");
+    throw new Error(
+        "El cálculo sigue en proceso. Consulta Cálculos recientes más tarde."
+    );
+}
+
+const JOB_TYPE_LABELS = {
+    problem: "Resolver modelo",
+    portfolio: "Optimizar portafolio",
+    frontier: "Frontera eficiente"
+};
+const JOB_STATUS_LABELS = {
+    queued: "En cola",
+    running: "Calculando",
+    completed: "Completado",
+    failed: "Fallido"
+};
+let recentJobsTimer = null;
+
+function renderRecentJobs(jobs) {
+    const target = document.getElementById("dashboard-jobs");
+    if (!jobs.length) {
+        target.innerHTML = `<tr><td class="dashboard-history-empty" colspan="5">
+            <span>Aún no hay cálculos. Cuando resuelvas un modelo u optimices un portafolio, aparecerán aquí.</span>
+        </td></tr>`;
+        return;
+    }
+    target.innerHTML = jobs.map((job) => {
+        const statusLabel = JOB_STATUS_LABELS[job.status] || job.status;
+        const action = job.status === "completed" && job.target
+            ? `<button class="secondary-button" type="button" data-job-open="${escapeHTML(job.id)}">Ver resultado</button>`
+            : "";
+        const error = job.status === "failed" && job.error
+            ? `<span class="job-error">${escapeHTML(job.error)}</span>`
+            : "";
+        return `
+            <tr data-job-id="${escapeHTML(job.id)}">
+                <td><span class="dashboard-history-type">${escapeHTML(JOB_TYPE_LABELS[job.type] || job.type)}</span></td>
+                <td>${escapeHTML(job.target?.name || "Eliminado")}</td>
+                <td>
+                    <span class="job-status job-status-${escapeHTML(job.status)}">${escapeHTML(statusLabel)}</span>
+                    ${error}
+                </td>
+                <td>${escapeHTML(formatDashboardDate(job.completed_at || job.created_at))}</td>
+                <td class="job-actions">${action}</td>
+            </tr>`;
+    }).join("");
+}
+
+async function loadRecentJobs() {
+    clearTimeout(recentJobsTimer);
+    recentJobsTimer = null;
+    if (appContent.hidden) return;
+    const message = document.getElementById("dashboard-jobs-message");
+    try {
+        const jobs = await requestJSON(`${API_URL}/trabajos-optimizacion/`);
+        if (appContent.hidden) return;
+        message.hidden = true;
+        renderRecentJobs(jobs);
+        // Mientras haya cálculos pendientes, la lista se actualiza sola.
+        if (jobs.some((job) => job.status === "queued" || job.status === "running")) {
+            recentJobsTimer = setTimeout(loadRecentJobs, 3000);
+        }
+    } catch (error) {
+        if (appContent.hidden) return;
+        message.textContent = `No se pudieron cargar los cálculos: ${error.message}`;
+        message.classList.add("error-message");
+        message.hidden = false;
+    }
+}
+
+async function openRecentJob(jobId, button) {
+    const message = document.getElementById("dashboard-jobs-message");
+    button.disabled = true;
+    try {
+        const job = await requestJSON(
+            `${API_URL}/trabajos-optimizacion/${encodeURIComponent(jobId)}/`
+        );
+        if (job.status !== "completed" || !job.target) {
+            throw new Error("Este cálculo no tiene un resultado disponible.");
+        }
+        if (job.type === "problem") {
+            await loadProblem(job.target.id);
+            renderProblemResult(job.result);
+            document.querySelector(".details-panel")?.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+            return;
+        }
+        navigateAppView("#portfolio-panel");
+        if (job.type === "portfolio") {
+            await renderPortfolioResult(job.result, job.target.id);
+            document.getElementById("portfolio-result").scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        } else {
+            renderFrontier(job.result);
+            document.getElementById("frontier-chart").scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }
+    } catch (error) {
+        message.textContent = `No se pudo abrir el resultado: ${error.message}`;
+        message.classList.add("error-message");
+        message.hidden = false;
+    } finally {
+        button.disabled = false;
+    }
 }
 
 async function downloadExecutionReport(target, format, button) {
@@ -1649,6 +1763,7 @@ async function loadDashboard({ force = false } = {}) {
             dashboardState.dirty = false;
             renderDashboardKPIs(summary);
             renderDashboardActivity(summary);
+            loadRecentJobs();
             const chartsRendered = renderDashboardCharts(summary);
             if (chartsRendered) {
                 setDashboardStatus("ready");
@@ -1716,6 +1831,32 @@ async function loadPortfolios() {
     }
 }
 
+async function renderPortfolioResult(result, id) {
+    selectedPortfolioId = id;
+    lastPortfolioExecutionId = result.id;
+    document.getElementById("portfolio-result-values").innerHTML = `
+        <div class="solution-card"><span>Rendimiento esperado</span><strong>${formatNumber(result.rendimientos_portafolio)}</strong></div>
+        <div class="solution-card"><span>Volatilidad</span><strong>${formatNumber(result.volatilidad_portafolio)}</strong></div>
+        <div class="solution-card"><span>Utilidad ajustada por riesgo</span><strong>${formatNumber(result.utilidad_riesgo)}</strong></div>
+        <div class="solution-card"><span>Rendimiento anualizado (aprox.)</span><strong>${formatNumber(result.rendimiento_anualizado * 100)} %</strong></div>
+        <div class="solution-card"><span>Volatilidad anualizada (aprox.)</span><strong>${formatNumber(result.volatilidad_anualizada * 100)} %</strong></div>
+        ${result.ponderaciones.map((weight, index) => `<div class="solution-card"><span>${escapeHTML(result.modelo_snapshot.activos[index])}</span><strong>${formatNumber(weight * 100)} %</strong></div>`).join("")}`;
+    document.getElementById("portfolio-result-values").innerHTML +=
+        result.contribuciones_riesgo.map((risk, index) => `
+            <div class="solution-card">
+                <span>Contribución al riesgo · ${escapeHTML(result.modelo_snapshot.activos[index])}</span>
+                <strong>${formatNumber(risk.contribucion_volatilidad * 100)} % (${formatNumber(risk.proporcion_volatilidad * 100)} % del riesgo)</strong>
+            </div>`).join("") +
+        Object.entries(result.resultados_estres || {}).map(([scenario, value]) => `
+            <div class="solution-card">
+                <span>Escenario · ${escapeHTML(scenario)}</span>
+                <strong>${formatNumber(value * 100)} %</strong>
+            </div>`).join("");
+    document.getElementById("portfolio-result").hidden = false;
+    renderPortfolioComparisonInputs(result);
+    await managePortfolio("history", id);
+}
+
 async function managePortfolio(action, id, triggerButton = null) {
     const url = `${API_URL}/portafolios/${encodeURIComponent(id)}/`;
     const message = document.getElementById("portfolio-message");
@@ -1757,28 +1898,7 @@ async function managePortfolio(action, id, triggerButton = null) {
                 }
             );
             message.hidden = true;
-            lastPortfolioExecutionId = result.id;
-            document.getElementById("portfolio-result-values").innerHTML = `
-                <div class="solution-card"><span>Rendimiento esperado</span><strong>${formatNumber(result.rendimientos_portafolio)}</strong></div>
-                <div class="solution-card"><span>Volatilidad</span><strong>${formatNumber(result.volatilidad_portafolio)}</strong></div>
-                <div class="solution-card"><span>Utilidad ajustada por riesgo</span><strong>${formatNumber(result.utilidad_riesgo)}</strong></div>
-                <div class="solution-card"><span>Rendimiento anualizado (aprox.)</span><strong>${formatNumber(result.rendimiento_anualizado * 100)} %</strong></div>
-                <div class="solution-card"><span>Volatilidad anualizada (aprox.)</span><strong>${formatNumber(result.volatilidad_anualizada * 100)} %</strong></div>
-                ${result.ponderaciones.map((weight, index) => `<div class="solution-card"><span>${escapeHTML(result.modelo_snapshot.activos[index])}</span><strong>${formatNumber(weight * 100)} %</strong></div>`).join("")}`;
-            document.getElementById("portfolio-result-values").innerHTML +=
-                result.contribuciones_riesgo.map((risk, index) => `
-                    <div class="solution-card">
-                        <span>Contribución al riesgo · ${escapeHTML(result.modelo_snapshot.activos[index])}</span>
-                        <strong>${formatNumber(risk.contribucion_volatilidad * 100)} % (${formatNumber(risk.proporcion_volatilidad * 100)} % del riesgo)</strong>
-                    </div>`).join("") +
-                Object.entries(result.resultados_estres || {}).map(([scenario, value]) => `
-                    <div class="solution-card">
-                        <span>Escenario · ${escapeHTML(scenario)}</span>
-                        <strong>${formatNumber(value * 100)} %</strong>
-                    </div>`).join("");
-            document.getElementById("portfolio-result").hidden = false;
-            renderPortfolioComparisonInputs(result);
-            await managePortfolio("history", id);
+            await renderPortfolioResult(result, id);
             return;
         }
         if (action === "frontier") {
@@ -2160,50 +2280,54 @@ async function solveProblem() {
             }
         );
 
-        const status = result.estado;
-        const isOptimal = status === "OPT";
-        lastProblemExecutionId = result.id;
-
-        document.getElementById("result-status").textContent =
-            getStatusLabel(status);
-
-        document.getElementById("result-status").classList.toggle(
-            "bad",
-            !isOptimal
-        );
-
-        document.getElementById("result-objective").textContent =
-            result.valor_objetivo === null ||
-            result.valor_objetivo === undefined
-                ? "No disponible"
-                : formatNumber(result.valor_objetivo);
-
-        const values = result.valores || [];
-
-        document.getElementById("solution-values").innerHTML =
-            values.length > 0
-                ? values.map((item) => `
-                    <div class="solution-card">
-                        <span>${escapeHTML(item.variable_nombre || `Variable ${item.variable}`)}</span>
-                        <strong>${escapeHTML(formatNumber(item.valor))}</strong>
-                    </div>
-                `).join("")
-                : '<p class="muted">No hay valores de solución disponibles.</p>';
-
-        document.getElementById("result-message").textContent =
-            result.mensaje || "El solucionador terminó la ejecución.";
-
-        resultsSection.hidden = false;
-        resultsSection.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest"
-        });
+        renderProblemResult(result);
     } catch (error) {
         showError(`No se pudo resolver el problema: ${error.message}`);
     } finally {
         solveButton.disabled = false;
         solveButton.innerHTML = "<span>▶</span> Resolver problema";
     }
+}
+
+function renderProblemResult(result) {
+    const status = result.estado;
+    const isOptimal = status === "OPT";
+    lastProblemExecutionId = result.id;
+
+    document.getElementById("result-status").textContent =
+        getStatusLabel(status);
+
+    document.getElementById("result-status").classList.toggle(
+        "bad",
+        !isOptimal
+    );
+
+    document.getElementById("result-objective").textContent =
+        result.valor_objetivo === null ||
+        result.valor_objetivo === undefined
+            ? "No disponible"
+            : formatNumber(result.valor_objetivo);
+
+    const values = result.valores || [];
+
+    document.getElementById("solution-values").innerHTML =
+        values.length > 0
+            ? values.map((item) => `
+                <div class="solution-card">
+                    <span>${escapeHTML(item.variable_nombre || `Variable ${item.variable}`)}</span>
+                    <strong>${escapeHTML(formatNumber(item.valor))}</strong>
+                </div>
+            `).join("")
+            : '<p class="muted">No hay valores de solución disponibles.</p>';
+
+    document.getElementById("result-message").textContent =
+        result.mensaje || "El solucionador terminó la ejecución.";
+
+    resultsSection.hidden = false;
+    resultsSection.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest"
+    });
 }
 
 async function manageProblem(action) {
@@ -2518,6 +2642,12 @@ document.getElementById("dashboard-problems").addEventListener("click", (event) 
         behavior: "smooth",
         block: "start"
     });
+});
+
+document.getElementById("dashboard-jobs").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-job-open]");
+    if (!button) return;
+    openRecentJob(button.dataset.jobOpen, button);
 });
 
 document.getElementById("dashboard-portfolios").addEventListener("click", (event) => {

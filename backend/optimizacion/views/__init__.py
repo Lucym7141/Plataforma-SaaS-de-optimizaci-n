@@ -48,6 +48,7 @@ from .portfolios import (  # noqa: F401
 )
 from .jobs import (  # noqa: F401
     detalle_trabajo_optimizacion,
+    listar_trabajos_optimizacion,
 )
 from .pages import (  # noqa: F401
     listar_planes,

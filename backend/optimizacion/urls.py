@@ -7,6 +7,11 @@ app_name = "optimizacion"
 
 urlpatterns = [
     path(
+        "trabajos-optimizacion/",
+        views.listar_trabajos_optimizacion,
+        name="optimization_job_list",
+    ),
+    path(
         "trabajos-optimizacion/<uuid:job_id>/",
         views.detalle_trabajo_optimizacion,
         name="optimization_job_detail",

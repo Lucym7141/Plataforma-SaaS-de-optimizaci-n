@@ -1259,3 +1259,50 @@ test("user can generate a model draft with AI and confirm before saving", async 
     const deleteResponse = await deleteResponsePromise;
     expect(deleteResponse.status()).toBe(204);
 });
+
+test("recent calculations survive a reload and reopen their results", async ({ page }) => {
+    await signIn(page);
+    const name = `E2E historial ${Date.now()}`;
+    const submission = await page.evaluate(async (portfolioName) => {
+        const csrfToken = document.cookie
+            .split("; ")
+            .find((cookie) => cookie.startsWith("csrftoken="))
+            ?.slice("csrftoken=".length);
+        const headers = {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken
+        };
+        const created = await fetch("/api/portafolios/", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+                nombre: portfolioName,
+                activos: ["Bono", "Acción"],
+                rendimientos_esperados: ["0.10", "0.20"],
+                covarianza: [["0.04", "0"], ["0", "0.09"]],
+                aversion_riesgo: "2"
+            })
+        }).then((response) => response.json());
+        const solve = await fetch(`/api/portafolios/${created.id}/resolver/`, {
+            method: "POST",
+            headers
+        });
+        return { status: solve.status };
+    }, name);
+    expect(submission.status).toBe(202);
+
+    // Simula cerrar la pestaña: se recarga sin esperar el resultado.
+    await page.reload();
+    await expect(page.locator("#app-content")).toBeVisible();
+    const row = page.locator("#dashboard-jobs tr").filter({ hasText: name });
+    await expect(row).toContainText("Optimizar portafolio");
+    await expect(row.locator(".job-status")).toHaveText("Completado", {
+        timeout: 30_000
+    });
+
+    await row.getByRole("button", { name: "Ver resultado" }).click();
+    await expect(page.locator("#portfolio-result")).toBeVisible();
+    await expect(page.locator("#portfolio-result-values"))
+        .toContainText("Rendimiento esperado");
+    await expect(page.locator("#portfolio-history")).toBeVisible();
+});
