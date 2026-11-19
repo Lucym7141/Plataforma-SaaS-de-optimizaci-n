@@ -9,3 +9,5 @@ reportlab==4.4.4
 psycopg[binary]==3.3.6
 pulp[cbc]==4.2.0
 celery[redis]>=5.4,<6.0
+gunicorn==26.2.0
+whitenoise==6.12.0

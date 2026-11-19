@@ -82,3 +82,37 @@ jobs:
             test-results/
             playwright-report/
           if-no-files-found: ignore
+
+  docker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create test configuration
+        run: |
+          cp .env.example .env
+          sed -i "s/^DJANGO_SECRET_KEY=.*/DJANGO_SECRET_KEY=$(openssl rand -hex 32)/" .env
+          sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 16)/" .env
+          sed -i "s/^EMAIL_HOST=.*/EMAIL_HOST=localhost/" .env
+          sed -i "s/^DJANGO_SECURE_HSTS_SECONDS=.*/DJANGO_SECURE_HSTS_SECONDS=60/" .env
+      - name: Build and start the full stack
+        run: docker compose up -d --build
+      - name: Check HTTPS, static files, database and worker
+        run: |
+          for attempt in $(seq 1 30); do
+            curl -fsk https://localhost/health/ && break
+            sleep 2
+          done
+          curl -fsk https://localhost/health/
+          curl -fsk -o /dev/null https://localhost/
+          curl -fsk -o /dev/null https://localhost/static/app.js
+          curl -fsk -o /dev/null https://localhost/static/react-build/react-app.js
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost/)" = "308"
+          docker compose exec -T worker celery -A config inspect ping --timeout 10
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
