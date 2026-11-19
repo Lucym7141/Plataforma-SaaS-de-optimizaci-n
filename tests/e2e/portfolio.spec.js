@@ -140,7 +140,11 @@ test("premium button opens the public informative plans in a new tab", async ({ 
         const returnPagePromise = page.waitForEvent("popup");
         await premiumButton.click();
         const returnPage = await returnPagePromise;
-        await returnPage.locator(selector).click();
+        // El enlace cierra la pestaña con window.close(); si se cierra antes
+        // de que Playwright termine el clic, ese error es el resultado esperado.
+        await returnPage.locator(selector).click().catch((error) => {
+            if (!returnPage.isClosed()) throw error;
+        });
         await expect.poll(() => returnPage.isClosed()).toBe(true);
         await expect(page).toHaveURL(/\/$/);
         await expect(page.locator("#auth-panel")).toBeVisible();
