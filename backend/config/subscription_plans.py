@@ -5,6 +5,11 @@ import re
 from django.core.exceptions import ImproperlyConfigured
 
 
+PLAN_LIMIT_KEYS = ("models", "portfolios", "assets_per_portfolio")
+
+# "limits" es opcional: un valor null (o un plan sin "limits") significa sin
+# límite para ese recurso. El primer plan de la lista es el que reciben las
+# cuentas nuevas.
 DEFAULT_SUBSCRIPTION_PLANS = [
     {
         "id": "inicial",
@@ -19,6 +24,11 @@ DEFAULT_SUBSCRIPTION_PLANS = [
             "Hasta 10 activos por portafolio",
         ],
         "featured": False,
+        "limits": {
+            "models": 3,
+            "portfolios": 1,
+            "assets_per_portfolio": 10,
+        },
     },
     {
         "id": "profesional",
@@ -33,6 +43,11 @@ DEFAULT_SUBSCRIPTION_PLANS = [
             "Hasta 50 activos por portafolio",
         ],
         "featured": True,
+        "limits": {
+            "models": 25,
+            "portfolios": 10,
+            "assets_per_portfolio": 50,
+        },
     },
     {
         "id": "profesional-pro",
@@ -47,6 +62,11 @@ DEFAULT_SUBSCRIPTION_PLANS = [
             "Hasta 100 activos por portafolio",
         ],
         "featured": False,
+        "limits": {
+            "models": 100,
+            "portfolios": 25,
+            "assets_per_portfolio": 100,
+        },
     },
 ]
 
@@ -71,7 +91,7 @@ def load_subscription_plans(raw_value):
     for plan in plans:
         if not isinstance(plan, dict):
             raise ImproperlyConfigured("Cada plan debe ser un objeto JSON.")
-        if set(plan) != {
+        required_keys = {
             "id",
             "name",
             "description",
@@ -80,11 +100,25 @@ def load_subscription_plans(raw_value):
             "interval",
             "features",
             "featured",
-        }:
+        }
+        if not required_keys <= set(plan) <= required_keys | {"limits"}:
             raise ImproperlyConfigured(
                 "Cada plan debe incluir id, name, description, price, "
-                "currency, interval, features y featured."
+                "currency, interval, features y featured, y opcionalmente "
+                "limits."
             )
+        limits = plan.get("limits", {})
+        if not isinstance(limits, dict) or not set(limits) <= set(PLAN_LIMIT_KEYS):
+            raise ImproperlyConfigured(
+                "limits solo admite models, portfolios y assets_per_portfolio."
+            )
+        for value in limits.values():
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value < 0
+            ):
+                raise ImproperlyConfigured(
+                    "Cada límite debe ser un entero no negativo o null."
+                )
         plan_id = plan["id"]
         if (
             not isinstance(plan_id, str)

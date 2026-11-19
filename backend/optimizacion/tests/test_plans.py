@@ -50,3 +50,28 @@ class SubscriptionPlansTests(TestCase):
             load_subscription_plans(json.dumps(plans)),
             plans,
         )
+
+    def test_limits_es_opcional_y_se_valida(self):
+        base = {
+            "id": "basico",
+            "name": "Básico",
+            "description": "",
+            "price": 0,
+            "currency": "USD",
+            "interval": "monthly",
+            "features": [],
+            "featured": False,
+        }
+        valid = dict(base, limits={"models": 5, "portfolios": None})
+        self.assertEqual(
+            load_subscription_plans(json.dumps([valid]))[0]["limits"]["models"], 5
+        )
+        for limits in (
+            {"modelos": 5},
+            {"models": -1},
+            {"models": True},
+            {"models": 2.5},
+            [],
+        ):
+            with self.subTest(limits=limits), self.assertRaises(ImproperlyConfigured):
+                load_subscription_plans(json.dumps([dict(base, limits=limits)]))

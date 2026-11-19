@@ -94,14 +94,32 @@ por hora y se puede ajustar mediante `AI_MODELING_LIMIT`.
 
 ## Planes y precios
 
-La pantalla pública muestra planes informativos; no cobra ni activa
-suscripciones ni aplica los límites indicados. Inicialmente presenta Inicial
+Cada cuenta tiene un plan y la API aplica sus límites de modelos, portafolios
+y activos por portafolio; al alcanzarlos responde 403 con `code: "plan_limit"`
+y un mensaje que explica qué hacer. Los elementos archivados no cuentan, pero
+restaurarlos sí exige espacio. El perfil (`GET /api/profile/`) incluye el plan,
+sus límites y el uso actual, y la interfaz lo muestra en "Mi perfil". Todavía no
+hay cobros: el plan de una cuenta se cambia desde Django Admin (Perfiles de
+usuario) o con:
+
+```powershell
+..\.venv\Scripts\python.exe manage.py asignar_plan <usuario> --plan profesional
+```
+
+Para cuentas de demostración o de ventas, `--sin-limites` exime a la cuenta de
+todos los límites (`--con-limites` lo revierte); los superusuarios tampoco
+tienen límites. Es un indicador por cuenta y no por nombre de usuario, así que
+crea primero la cuenta y luego asígnalo.
+
+Las cuentas nuevas reciben el primer plan configurado. Inicialmente son Inicial
 gratis (3 modelos, 1 portafolio y 10 activos por portafolio) y Profesional a
 USD 3.95 al mes (25 modelos, 10 portafolios y 50 activos por portafolio), y
 Profesional Pro a USD 10.50 al mes (100 modelos, 25 portafolios y 100 activos
 por portafolio). El plan Equipos queda pendiente hasta que exista colaboración
 entre usuarios. Los precios y características se pueden configurar con
-`SUBSCRIPTION_PLANS_JSON`. Ejemplo en PowerShell:
+`SUBSCRIPTION_PLANS_JSON`. Cada plan admite un campo opcional `limits` con
+`models`, `portfolios` y `assets_per_portfolio` (enteros o `null` para sin
+límite); un plan sin `limits` no restringe nada. Ejemplo en PowerShell:
 
 ```powershell
 $env:SUBSCRIPTION_PLANS_JSON = '[{"id":"personal","name":"Personal","description":"Para uso individual.","price":19900,"currency":"COP","interval":"monthly","features":["Modelos de optimización","Reportes PDF y Excel"],"featured":false}]'

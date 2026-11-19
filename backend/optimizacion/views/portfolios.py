@@ -1,8 +1,6 @@
 """API de portafolios de inversión."""
-from .common import _execution_report_response
-from .jobs import _active_job_exists, _create_optimization_job
 
-
+from django.db import transaction
 from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status
 from rest_framework.decorators import (
@@ -23,11 +21,21 @@ from ..serializers import (
     OptimizacionPortafolioSerializer,
     EjecucionPortafolioSerializer,
 )
+from ..plans import (
+    PlanLimitError,
+    check_asset_count,
+    check_can_add,
+    lock_account,
+    plan_limit_response,
+)
 from ..portfolio_import import preview_portfolio_csv
 from ..reporting import build_portfolio_report
 from ..throttles import (
     ResolverRateThrottle,
 )
+
+from .common import _execution_report_response
+from .jobs import _active_job_exists, _create_optimization_job
 
 
 def _portfolio_values(validated_data):
@@ -70,10 +78,19 @@ def listar_portafolios(request):
 
     serializer = DatosPortafolioSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
-    item = OptimizacionPortafolio.objects.create(
-        propietario=request.user,
-        **_portfolio_values(serializer.validated_data),
-    )
+    try:
+        with transaction.atomic():
+            lock_account(request.user)
+            check_can_add(request.user, "portfolios")
+            check_asset_count(
+                request.user, len(serializer.validated_data["activos"])
+            )
+            item = OptimizacionPortafolio.objects.create(
+                propietario=request.user,
+                **_portfolio_values(serializer.validated_data),
+            )
+    except PlanLimitError as error:
+        return plan_limit_response(error)
     return Response(
         OptimizacionPortafolioSerializer(item).data,
         status=status.HTTP_201_CREATED,
@@ -96,6 +113,10 @@ def previsualizar_importacion_portafolio(request):
         )
     except serializers.ValidationError as error:
         return Response(error.detail, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        check_asset_count(request.user, len(preview["activos"]))
+    except PlanLimitError as error:
+        return plan_limit_response(error)
     return Response({"preview": preview})
 
 
@@ -126,6 +147,10 @@ def detalle_portafolio(request, portafolio_id):
 
     serializer = DatosPortafolioSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
+    try:
+        check_asset_count(request.user, len(serializer.validated_data["activos"]))
+    except PlanLimitError as error:
+        return plan_limit_response(error)
     for field, value in _portfolio_values(serializer.validated_data).items():
         setattr(item, field, value)
     item.save()
@@ -141,8 +166,23 @@ def duplicar_portafolio(request, portafolio_id):
         propietario=request.user,
         archivado=False,
     )
-    copia = OptimizacionPortafolio.objects.create(
-        propietario=request.user,
+    try:
+        with transaction.atomic():
+            lock_account(request.user)
+            check_can_add(request.user, "portfolios")
+            check_asset_count(request.user, len(item.activos))
+            copia = _duplicate_portfolio(request.user, item)
+    except PlanLimitError as error:
+        return plan_limit_response(error)
+    return Response(
+        OptimizacionPortafolioSerializer(copia).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+def _duplicate_portfolio(owner, item):
+    return OptimizacionPortafolio.objects.create(
+        propietario=owner,
         nombre=f"{item.nombre} (copia)"[:150],
         activos=item.activos,
         rendimientos_esperados=item.rendimientos_esperados,
@@ -154,10 +194,6 @@ def duplicar_portafolio(request, portafolio_id):
         pesos_maximos=item.pesos_maximos or ["1"] * len(item.activos),
         limites_categoria=item.limites_categoria,
         escenarios_estres=item.escenarios_estres,
-    )
-    return Response(
-        OptimizacionPortafolioSerializer(copia).data,
-        status=status.HTTP_201_CREATED,
     )
 
 
@@ -247,6 +283,13 @@ def restaurar_portafolio(request, portafolio_id):
         propietario=request.user,
         archivado=True,
     )
-    item.archivado = False
-    item.save(update_fields=["archivado", "actualizado_en"])
+    try:
+        with transaction.atomic():
+            lock_account(request.user)
+            check_can_add(request.user, "portfolios")
+            check_asset_count(request.user, len(item.activos))
+            item.archivado = False
+            item.save(update_fields=["archivado", "actualizado_en"])
+    except PlanLimitError as error:
+        return plan_limit_response(error)
     return Response(OptimizacionPortafolioSerializer(item).data)

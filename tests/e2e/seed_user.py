@@ -10,7 +10,7 @@ django.setup()
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from optimizacion.models import VerificacionCorreo
+from optimizacion.models import PerfilUsuario, VerificacionCorreo
 
 username = "e2e-user"
 email = "e2e@example.com"
@@ -59,6 +59,9 @@ with transaction.atomic():
             verificado_en=django.utils.timezone.now(),
         ),
     ])
+    # La suite crea muchos modelos y portafolios con la misma cuenta; los
+    # límites de los planes se prueban en las pruebas del backend.
+    PerfilUsuario.objects.create(usuario=owner, sin_limites=True)
     ProblemaOptimizacion.objects.create(
         propietario=owner,
         nombre="E2E private problem",

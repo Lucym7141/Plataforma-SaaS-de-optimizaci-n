@@ -120,7 +120,7 @@ test("premium button opens the public informative plans in a new tab", async ({ 
     await expect(pricing.locator(".pricing-card").nth(2))
         .toContainText(/10[.,]50/);
     await expect(pricing).toContainText(
-        "no procesa pagos, activa suscripciones ni aplica los límites"
+        "aún no procesa pagos ni activa suscripciones"
     );
     await expect(pricing.locator(".pricing-card").nth(1))
         .toContainText("Profesional");
@@ -604,6 +604,9 @@ test("sidebar navigation works as a keyboard-accessible mobile drawer", async ({
     await profileTrigger.click();
     await expect(page.getByRole("dialog", { name: "Mi perfil" })).toBeVisible();
     await expect(page.locator("#profile-drawer-close")).toBeFocused();
+    // La cuenta E2E está exenta de límites (ver seed_user.py).
+    await expect(page.locator("#profile-plan-name")).toHaveText("Inicial · Sin límites");
+    await expect(page.locator("#profile-plan-usage")).toContainText("sin límite");
     expect(page.url()).toBe(currentUrl);
     expect(await page.evaluate(() => window.scrollY)).toBe(currentScroll);
     await page.keyboard.press("Escape");
