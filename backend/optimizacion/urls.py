@@ -55,6 +55,11 @@ urlpatterns = [
         name="generar_problema_desde_texto",
     ),
     path(
+        "problemas/conversar/",
+        views.conversar_modelo,
+        name="conversar_modelo",
+    ),
+    path(
         "problemas/",
         views.listar_problemas,
         name="listar_problemas",

@@ -96,3 +96,7 @@ class ResolverRateThrottle(AtomicRateThrottle, UserRateThrottle):
 
 class GenerarModeloRateThrottle(ResolverRateThrottle):
     scope = "ai_modeling"
+
+
+class ConversarModeloRateThrottle(ResolverRateThrottle):
+    scope = "ai_chat"

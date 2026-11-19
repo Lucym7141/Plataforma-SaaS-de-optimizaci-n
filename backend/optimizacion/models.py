@@ -479,6 +479,7 @@ class UsoIA(models.Model):
     class Tipo(models.TextChoices):
         BORRADOR = "borrador", "Borrador de modelo"
         EXPLICACION = "explicacion", "Explicación de resultado"
+        CONVERSACION = "conversacion", "Mensaje al asistente"
 
     usuario = models.ForeignKey(
         settings.AUTH_USER_MODEL,

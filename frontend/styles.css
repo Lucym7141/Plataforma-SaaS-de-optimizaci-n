@@ -4967,3 +4967,61 @@ body:not(.authenticated) .notification-menu {
     font-weight: 600;
     color: var(--muted);
 }
+
+.model-chat {
+    display: grid;
+    gap: 10px;
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+}
+
+.model-chat h4 {
+    margin: 0;
+}
+
+.model-chat-messages {
+    display: grid;
+    gap: 8px;
+    max-height: 320px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+}
+
+.model-chat-message {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.model-chat-message p {
+    margin: 2px 0 0;
+    white-space: pre-wrap;
+}
+
+.model-chat-usuario {
+    justify-self: end;
+    background: var(--primary-soft);
+    border-color: var(--primary-border);
+}
+
+.model-chat-author {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--muted);
+}
+
+.model-chat-form {
+    display: grid;
+    gap: 8px;
+}
+
+.model-chat-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}

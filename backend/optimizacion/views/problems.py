@@ -24,6 +24,7 @@ from ..serializers import (
     ProblemaOptimizacionSerializer,
     ProblemaOptimizacionCrearSerializer,
     ProblemaDesdeTextoSerializer,
+    ConversacionModeloSerializer,
     EjecucionOptimizacionSerializer,
 )
 from ..plans import (
@@ -39,8 +40,10 @@ from ..ai_modeling import (
     AzureOpenAIConfigurationError,
     AzureOpenAIServiceError,
     generar_modelo,
+    refinar_modelo,
 )
 from ..throttles import (
+    ConversarModeloRateThrottle,
     ResolverRateThrottle,
     GenerarModeloRateThrottle,
 )
@@ -163,6 +166,70 @@ def generar_problema_desde_texto(request):
         )
     record_ai_use(request.user, UsoIA.Tipo.BORRADOR)
     return Response(validacion.validated_data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([ConversarModeloRateThrottle])
+def conversar_modelo(request):
+    """Ajusta el borrador del editor según un mensaje de la persona.
+
+    No guarda la conversación ni el modelo: el navegador envía el borrador
+    actual y los últimos mensajes, y recibe el modelo actualizado validado."""
+    solicitud = ConversacionModeloSerializer(data=request.data)
+    if not solicitud.is_valid():
+        return Response(solicitud.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        check_ai_quota(request.user)
+    except PlanLimitError as error:
+        return plan_limit_response(error)
+
+    datos = solicitud.validated_data
+    try:
+        resultado = refinar_modelo(
+            datos["modelo"],
+            [dict(mensaje) for mensaje in datos["historial"]],
+            datos["instruccion"],
+        )
+    except AzureOpenAIConfigurationError as error:
+        return Response(
+            {"detail": str(error)},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except AzureOpenAIServiceError:
+        logger.exception("Azure OpenAI no pudo ajustar un modelo.")
+        return Response(
+            {
+                "detail": (
+                    "No se pudo obtener respuesta del asistente. Vuelve a "
+                    "intentarlo en unos minutos."
+                )
+            },
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+    record_ai_use(request.user, UsoIA.Tipo.CONVERSACION)
+
+    if resultado["modelo"] is None:
+        return Response({"respuesta": resultado["respuesta"], "modelo": None})
+
+    validacion = ProblemaOptimizacionCrearSerializer(data=resultado["modelo"])
+    if not validacion.is_valid():
+        logger.warning("El asistente propuso un modelo que no pasó validación.")
+        return Response(
+            {
+                "detail": (
+                    "El asistente propuso cambios que no cumplen las "
+                    "validaciones del modelo. Reformula el pedido con más "
+                    "detalle."
+                )
+            },
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+    return Response({
+        "respuesta": resultado["respuesta"],
+        "modelo": validacion.validated_data,
+    })
 
 
 @api_view(["GET", "PUT", "DELETE"])

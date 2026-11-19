@@ -1446,3 +1446,78 @@ test("portfolio drafts from a description fill the form and report missing data"
     await expect(page.locator("#portfolio-message")).toContainText("Portafolio guardado.");
     await expect(page.locator(".portfolio-card").filter({ hasText: name })).toBeVisible();
 });
+
+test("the assistant chat adjusts the draft, asks when unsure and can undo", async ({ page }) => {
+    await signIn(page);
+    await openView(page, "#problem-workspace", "models");
+    const draft = {
+        nombre: "Plan conversado",
+        descripcion: "",
+        tipo_objetivo: "MAX",
+        variables: [
+            { nombre: "x", descripcion: "", unidad: "", tipo: "CONT", limite_inferior: "0", limite_superior: null }
+        ],
+        terminos_objetivo: [{ variable_nombre: "x", coeficiente: "3" }],
+        restricciones: []
+    };
+    await page.route("**/api/problemas/generar/", (route) => route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(draft)
+    }));
+    // Azure no está disponible en las pruebas: se simulan sus respuestas.
+    const chatRequests = [];
+    await page.route("**/api/problemas/conversar/", async (route) => {
+        const body = route.request().postDataJSON();
+        chatRequests.push(body);
+        const reply = chatRequests.length === 1
+            ? { respuesta: "¿Cuántas horas usa x por unidad?", modelo: null }
+            : {
+                respuesta: "Agregué la restricción horas.",
+                modelo: {
+                    ...draft,
+                    restricciones: [{
+                        nombre: "horas",
+                        operador: "LE",
+                        lado_derecho: "40",
+                        terminos: [{ variable_nombre: "x", coeficiente: "2" }]
+                    }]
+                }
+            };
+        await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(reply)
+        });
+    });
+
+    const assistant = page.locator(".problem-ai-assistant");
+    await assistant.getByLabel("Descripción del problema")
+        .fill("Maximiza la utilidad de x con 3 por unidad.");
+    await assistant.getByRole("button", { name: "Generar borrador con IA" }).click();
+    const form = page.locator("#problem-author-form");
+    await expect(form.getByLabel("Nombre del modelo")).toHaveValue("Plan conversado");
+    await expect(form.locator(".problem-author-constraint")).toHaveCount(0);
+
+    const chat = page.locator(".model-chat");
+    const input = chat.getByLabel("Mensaje para el asistente");
+    await input.fill("Agrega una restricción de 40 horas.");
+    await chat.getByRole("button", { name: "Enviar" }).click();
+    await expect(chat.locator(".model-chat-asistente").last())
+        .toContainText("¿Cuántas horas usa x por unidad?");
+    await expect(form.locator(".problem-author-constraint")).toHaveCount(0);
+
+    await input.fill("x usa 2 horas por unidad.");
+    await chat.getByRole("button", { name: "Enviar" }).click();
+    await expect(chat.locator(".model-chat-asistente").last())
+        .toContainText("Agregué la restricción horas.");
+    await expect(form.locator(".problem-author-constraint")).toHaveCount(1);
+    expect(chatRequests[1].modelo.nombre).toBe("Plan conversado");
+    expect(chatRequests[1].historial.map((item) => item.rol))
+        .toEqual(["usuario", "asistente"]);
+
+    await chat.getByRole("button", { name: "Deshacer último cambio" }).click();
+    await expect(form.locator(".problem-author-constraint")).toHaveCount(0);
+    await expect(chat.locator(".model-chat-asistente").last())
+        .toContainText("Deshice el último cambio.");
+});

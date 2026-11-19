@@ -227,6 +227,57 @@ function ProblemAuthor() {
     const [assistantError, setAssistantError] = useState(false);
     const [message, setMessage] = useState("");
     const [isError, setIsError] = useState(false);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput] = useState("");
+    const [chatBusy, setChatBusy] = useState(false);
+    const [chatError, setChatError] = useState("");
+    const [undoSnapshot, setUndoSnapshot] = useState(null);
+
+    const resetChat = () => {
+        setChatMessages([]);
+        setChatInput("");
+        setChatError("");
+        setUndoSnapshot(null);
+    };
+
+    // Carga en el editor un modelo con el formato de la API.
+    const applyModel = (model) => {
+        const objectiveByName = new Map(
+            model.terminos_objetivo.map((term) => [
+                term.variable_nombre,
+                String(term.coeficiente)
+            ])
+        );
+        const nextVariables = model.variables.map((variable) => ({
+            nombre: variable.nombre,
+            descripcion: variable.descripcion || "",
+            unidad: variable.unidad || "",
+            tipo: variable.tipo,
+            limite_inferior: variable.limite_inferior ?? "",
+            limite_superior: variable.limite_superior ?? "",
+            coeficiente_objetivo: objectiveByName.get(variable.nombre) || "0"
+        }));
+        setName(model.nombre);
+        setDescription(model.descripcion || "");
+        setObjectiveType(model.tipo_objetivo);
+        setVariables(nextVariables);
+        setConstraints(model.restricciones.map((constraint) => {
+            const coefficients = new Map(
+                constraint.terminos.map((term) => [
+                    term.variable_nombre,
+                    String(term.coeficiente)
+                ])
+            );
+            return {
+                nombre: constraint.nombre,
+                operador: constraint.operador,
+                lado_derecho: String(constraint.lado_derecho),
+                coeficientes: nextVariables.map((variable) =>
+                    coefficients.get(variable.nombre) || "0"
+                )
+            };
+        }));
+    };
 
     const generateFromDescription = async (event) => {
         event.preventDefault();
@@ -246,42 +297,9 @@ function ProblemAuthor() {
             const result = await response.json();
             if (!response.ok) throw new Error(formatApiError(result));
 
-            const objectiveByName = new Map(
-                result.terminos_objetivo.map((term) => [
-                    term.variable_nombre,
-                    String(term.coeficiente)
-                ])
-            );
-            const nextVariables = result.variables.map((variable) => ({
-                nombre: variable.nombre,
-                descripcion: variable.descripcion || "",
-                unidad: variable.unidad || "",
-                tipo: variable.tipo,
-                limite_inferior: variable.limite_inferior ?? "",
-                limite_superior: variable.limite_superior ?? "",
-                coeficiente_objetivo: objectiveByName.get(variable.nombre) || "0"
-            }));
             setEditingId(null);
-            setName(result.nombre);
-            setDescription(result.descripcion || "");
-            setObjectiveType(result.tipo_objetivo);
-            setVariables(nextVariables);
-            setConstraints(result.restricciones.map((constraint) => {
-                const coefficients = new Map(
-                    constraint.terminos.map((term) => [
-                        term.variable_nombre,
-                        String(term.coeficiente)
-                    ])
-                );
-                return {
-                    nombre: constraint.nombre,
-                    operador: constraint.operador,
-                    lado_derecho: String(constraint.lado_derecho),
-                    coeficientes: nextVariables.map((variable) =>
-                        coefficients.get(variable.nombre) || "0"
-                    )
-                };
-            }));
+            applyModel(result);
+            resetChat();
             setOpen(true);
             setAssistantMessage(
                 "Borrador generado. Revisa y corrige cada valor antes de crear el modelo."
@@ -296,6 +314,7 @@ function ProblemAuthor() {
 
     const applyTemplate = (template) => {
         setEditingId(null);
+        resetChat();
         setName(template.name);
         setDescription(template.description);
         setObjectiveType(template.objectiveType);
@@ -316,6 +335,9 @@ function ProblemAuthor() {
             setOpen(true);
             setLoadingExisting(true);
             setEditingId(id);
+            setChatMessages([]);
+            setChatError("");
+            setUndoSnapshot(null);
             setMessage("");
             setIsError(false);
             try {
@@ -437,6 +459,7 @@ function ProblemAuthor() {
     };
 
     const resetForm = () => {
+        resetChat();
         setName("");
         setDescription("");
         setObjectiveType("MAX");
@@ -453,42 +476,100 @@ function ProblemAuthor() {
         setIsError(false);
     };
 
+    // Modelo del editor con el formato de la API (se usa al guardar y al
+    // conversar con el asistente).
+    const buildPayload = () => ({
+        nombre: name.trim(),
+        descripcion: description.trim(),
+        tipo_objetivo: objectiveType,
+        variables: variables.map((variable) => ({
+            nombre: variable.nombre.trim(),
+            descripcion: variable.descripcion.trim(),
+            unidad: variable.unidad.trim(),
+            tipo: variable.tipo,
+            limite_inferior: variable.tipo === "BIN"
+                ? "0"
+                : variable.limite_inferior || null,
+            limite_superior: variable.tipo === "BIN"
+                ? "1"
+                : variable.limite_superior || null
+        })),
+        terminos_objetivo: variables.map((variable) => ({
+            variable_nombre: variable.nombre.trim(),
+            coeficiente: variable.coeficiente_objetivo || "0"
+        })),
+        restricciones: constraints.map((constraint) => ({
+            nombre: constraint.nombre.trim(),
+            operador: constraint.operador,
+            lado_derecho: constraint.lado_derecho,
+            terminos: variables.map((variable, index) => ({
+                variable_nombre: variable.nombre.trim(),
+                coeficiente: constraint.coeficientes[index] || "0"
+            }))
+        }))
+    });
+
+    const sendChatMessage = async (event) => {
+        event.preventDefault();
+        const instruction = chatInput.trim();
+        if (instruction.length < 2 || chatBusy) return;
+        const history = chatMessages.slice(-10);
+        setChatMessages((current) => [...current, { rol: "usuario", texto: instruction }]);
+        setChatInput("");
+        setChatBusy(true);
+        setChatError("");
+        try {
+            const headers = { "Content-Type": "application/json" };
+            const token = csrfToken();
+            if (token) headers["X-CSRFToken"] = token;
+            const response = await fetch("/api/problemas/conversar/", {
+                method: "POST",
+                credentials: "same-origin",
+                headers,
+                body: JSON.stringify({
+                    instruccion: instruction,
+                    modelo: buildPayload(),
+                    historial: history
+                })
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(formatApiError(result));
+            if (result.modelo) {
+                setUndoSnapshot({ name, description, objectiveType, variables, constraints });
+                applyModel(result.modelo);
+            }
+            setChatMessages((current) => [
+                ...current,
+                { rol: "asistente", texto: result.respuesta }
+            ]);
+        } catch (error) {
+            setChatError(error.message);
+        } finally {
+            setChatBusy(false);
+        }
+    };
+
+    const undoChatChange = () => {
+        if (!undoSnapshot) return;
+        setName(undoSnapshot.name);
+        setDescription(undoSnapshot.description);
+        setObjectiveType(undoSnapshot.objectiveType);
+        setVariables(undoSnapshot.variables);
+        setConstraints(undoSnapshot.constraints);
+        setUndoSnapshot(null);
+        setChatMessages((current) => [
+            ...current,
+            { rol: "asistente", texto: "Deshice el último cambio." }
+        ]);
+    };
+
     const submit = async (event) => {
         event.preventDefault();
         if (loadingExisting) return;
         setSaving(true);
         setMessage("");
         setIsError(false);
-        const payload = {
-            nombre: name.trim(),
-            descripcion: description.trim(),
-            tipo_objetivo: objectiveType,
-            variables: variables.map((variable) => ({
-                nombre: variable.nombre.trim(),
-                descripcion: variable.descripcion.trim(),
-                unidad: variable.unidad.trim(),
-                tipo: variable.tipo,
-                limite_inferior: variable.tipo === "BIN"
-                    ? "0"
-                    : variable.limite_inferior || null,
-                limite_superior: variable.tipo === "BIN"
-                    ? "1"
-                    : variable.limite_superior || null
-            })),
-            terminos_objetivo: variables.map((variable) => ({
-                variable_nombre: variable.nombre.trim(),
-                coeficiente: variable.coeficiente_objetivo || "0"
-            })),
-            restricciones: constraints.map((constraint) => ({
-                nombre: constraint.nombre.trim(),
-                operador: constraint.operador,
-                lado_derecho: constraint.lado_derecho,
-                terminos: variables.map((variable, index) => ({
-                    variable_nombre: variable.nombre.trim(),
-                    coeficiente: constraint.coeficientes[index] || "0"
-                }))
-            }))
-        };
+        const payload = buildPayload();
 
         try {
             const headers = { "Content-Type": "application/json" };
@@ -578,6 +659,67 @@ function ProblemAuthor() {
                         </p>
                     )}
                 </form>
+                {open && !loadingExisting && (
+                    <section className="model-chat" aria-labelledby="model-chat-title">
+                        <h4 id="model-chat-title">Ajustar el borrador conversando</h4>
+                        <p className="muted">
+                            Pide cambios como «agrega una restricción de 40 horas» o «cambia x
+                            a entera». El asistente modifica el editor y puedes deshacer el
+                            último cambio. Cada mensaje usa una consulta de IA de tu plan; la
+                            conversación no se guarda.
+                        </p>
+                        {chatMessages.length > 0 && (
+                            <ol className="model-chat-messages" aria-live="polite">
+                                {chatMessages.map((chatMessage, index) => (
+                                    <li
+                                        key={index}
+                                        className={`model-chat-message model-chat-${chatMessage.rol}`}
+                                    >
+                                        <span className="model-chat-author">
+                                            {chatMessage.rol === "usuario" ? "Tú" : "Asistente"}
+                                        </span>
+                                        <p>{chatMessage.texto}</p>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                        <form className="model-chat-form" onSubmit={sendChatMessage}>
+                            <label htmlFor="model-chat-input">Mensaje para el asistente</label>
+                            <textarea
+                                id="model-chat-input"
+                                value={chatInput}
+                                onChange={(event) => setChatInput(event.target.value)}
+                                maxLength={2000}
+                                rows={2}
+                                placeholder="Ejemplo: agrega una restricción de 40 horas en la que x usa 2 horas por unidad."
+                            />
+                            <div className="model-chat-actions">
+                                <button
+                                    className="primary-button"
+                                    type="submit"
+                                    disabled={chatBusy || chatInput.trim().length < 2}
+                                    aria-busy={chatBusy}
+                                >
+                                    {chatBusy ? "Pensando..." : "Enviar"}
+                                </button>
+                                {undoSnapshot && (
+                                    <button
+                                        className="secondary-button"
+                                        type="button"
+                                        onClick={undoChatChange}
+                                    >
+                                        Deshacer último cambio
+                                    </button>
+                                )}
+                            </div>
+                            {chatError && (
+                                <p className="message error-message" role="alert">
+                                    {chatError}
+                                </p>
+                            )}
+                        </form>
+                    </section>
+                )}
             </section>
             <details className="problem-template-library">
                 <summary>Biblioteca de plantillas</summary>
