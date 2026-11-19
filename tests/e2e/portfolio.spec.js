@@ -10,7 +10,9 @@ async function signIn(page) {
     await page.locator("#login-username").fill(username);
     await page.locator("#login-password").fill(password);
     await page.getByRole("button", { name: "Iniciar sesión" }).click();
-    await expect(page.locator("#app-content")).toBeVisible();
+    // Verificar la contraseña y cargar el panel puede tardar más de los 5 s
+    // por defecto en las máquinas de CI, sobre todo con el worker activo.
+    await expect(page.locator("#app-content")).toBeVisible({ timeout: 20_000 });
     await expect(page.locator("#dashboard")).toBeVisible();
 }
 
