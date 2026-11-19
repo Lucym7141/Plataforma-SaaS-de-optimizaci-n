@@ -100,6 +100,24 @@ requiere una acción explícita para generar. El borrador debe revisarse antes
 de guardarse o resolverlo. El límite inicial es de 5 consultas de IA por
 usuario por hora y se puede ajustar mediante `AI_MODELING_LIMIT`.
 
+### Borradores de portafolio
+
+En el panel de portafolios, **Crear portafolio con IA a partir de una
+descripción** convierte un texto como «Bonos con rendimiento esperado de 6 % y
+volatilidad de 5 %; Acciones con 10 % y 20 %; correlación 0,3» en un borrador
+que se carga en el formulario para revisarlo antes de guardarlo.
+
+- La IA solo **transcribe** los números escritos: no usa datos de mercado, no
+  completa valores ni recomienda activos. Si falta un rendimiento o el riesgo
+  (covarianza, o volatilidades con correlaciones o la indicación explícita de
+  que no están correlacionados), responde qué falta en lugar de inventarlo.
+- La app hace todas las cuentas de forma determinista: convierte porcentajes
+  a fracciones y calcula la covarianza (σᵢ·σⱼ·ρᵢⱼ). El borrador se valida con
+  las mismas reglas que un portafolio guardado (matriz simétrica y positiva
+  semidefinida, límites de pesos y del plan) y lista los supuestos usados,
+  por ejemplo la aversión al riesgo por defecto.
+- Cada generación consume una consulta de la cuota mensual de IA.
+
 ### Explicación de resultados
 
 Después de resolver un modelo u optimizar un portafolio, el botón **Explicar

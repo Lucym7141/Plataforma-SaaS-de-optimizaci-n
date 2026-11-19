@@ -105,6 +105,11 @@ urlpatterns = [
         name="previsualizar_importacion_portafolio",
     ),
     path(
+        "portafolios/generar/",
+        views.generar_portafolio_desde_texto,
+        name="generar_portafolio_desde_texto",
+    ),
+    path(
         "portafolios/<int:portafolio_id>/duplicar/",
         views.duplicar_portafolio,
         name="duplicar_portafolio",

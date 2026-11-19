@@ -569,7 +569,8 @@ body:not(.authenticated) .notification-menu {
     font-size: 20px;
 }
 
-.csv-import {
+.csv-import,
+.portfolio-ai {
     max-width: 760px;
     padding: 14px;
     border: 1px solid var(--border);
@@ -577,7 +578,8 @@ body:not(.authenticated) .notification-menu {
     background: var(--surface-soft);
 }
 
-.csv-import summary {
+.csv-import summary,
+.portfolio-ai summary {
     color: var(--primary-dark);
     font-weight: 700;
     cursor: pointer;
@@ -4948,4 +4950,20 @@ body:not(.authenticated) .notification-menu {
 .ai-explanation-note {
     color: var(--muted);
     font-style: italic;
+}
+
+.portfolio-ai-notes {
+    display: grid;
+    gap: 4px;
+    margin: 8px 0 0;
+    padding-left: 20px;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.portfolio-ai-notes-title {
+    margin-left: -20px;
+    list-style: none;
+    font-weight: 600;
+    color: var(--muted);
 }
