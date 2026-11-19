@@ -20,6 +20,7 @@ class AzureOpenAIServiceTests(TestCase):
         ),
         AZURE_OPENAI_DEPLOYMENT="gpt-4.1-mini",
         AZURE_OPENAI_API_VERSION="",
+        AZURE_OPENAI_API_KEY="",
     )
     def test_responses_api_uses_foundry_endpoint_and_does_not_store_response(self):
         body = json.dumps({
@@ -59,6 +60,7 @@ class AzureOpenAIServiceTests(TestCase):
         AZURE_OPENAI_ENDPOINT="https://test.openai.azure.com",
         AZURE_OPENAI_DEPLOYMENT="unit-test",
         AZURE_OPENAI_API_VERSION="2024-10-21",
+        AZURE_OPENAI_API_KEY="",
     )
     def test_request_uses_managed_identity_and_configured_deployment(self):
         body = json.dumps({
@@ -104,3 +106,51 @@ class AzureOpenAIServiceTests(TestCase):
     def test_service_rejects_unsupported_endpoint_path(self):
         with self.assertRaises(AzureOpenAIConfigurationError):
             generar_modelo("Descripción suficientemente larga para probar")
+
+    @override_settings(
+        AZURE_OPENAI_ENDPOINT=(
+            "https://test.services.ai.azure.com/openai/v1/responses"
+        ),
+        AZURE_OPENAI_DEPLOYMENT="gpt-4.1-mini",
+        AZURE_OPENAI_API_VERSION="",
+        AZURE_OPENAI_API_KEY="  clave-de-prueba  ",
+    )
+    def test_api_key_replaces_azure_identity_outside_azure(self):
+        body = json.dumps({"output_text": '{"nombre":"modelo"}'}).encode("utf-8")
+        with (
+            patch("optimizacion.ai_modeling._access_token") as token_mock,
+            patch(
+                "optimizacion.ai_modeling.urlopen",
+                return_value=io.BytesIO(body),
+            ) as urlopen_mock,
+        ):
+            result = generar_modelo("Descripción privada del modelo")
+
+        self.assertEqual(result, '{"nombre":"modelo"}')
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(request.get_header("Api-key"), "clave-de-prueba")
+        self.assertIsNone(request.get_header("Authorization"))
+        token_mock.assert_not_called()
+
+    @override_settings(
+        AZURE_OPENAI_ENDPOINT="https://test.openai.azure.com",
+        AZURE_OPENAI_DEPLOYMENT="unit-test",
+        AZURE_OPENAI_API_VERSION="2024-10-21",
+        AZURE_OPENAI_API_KEY="clave-de-prueba",
+    )
+    def test_api_key_also_works_with_classic_endpoint(self):
+        body = json.dumps({
+            "choices": [{"message": {"content": '{"nombre":"modelo"}'}}]
+        }).encode("utf-8")
+        with (
+            patch("optimizacion.ai_modeling._access_token") as token_mock,
+            patch(
+                "optimizacion.ai_modeling.urlopen",
+                return_value=io.BytesIO(body),
+            ) as urlopen_mock,
+        ):
+            generar_modelo("Descripción privada del modelo")
+
+        request = urlopen_mock.call_args.args[0]
+        self.assertEqual(request.get_header("Api-key"), "clave-de-prueba")
+        token_mock.assert_not_called()

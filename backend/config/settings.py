@@ -158,6 +158,9 @@ OPTIMIZER_SOLVE_LIMIT = os.environ.get("OPTIMIZER_SOLVE_LIMIT", "5/m")
 AI_MODELING_LIMIT = os.environ.get("AI_MODELING_LIMIT", "5/h")
 AZURE_OPENAI_ENDPOINT = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
 AZURE_OPENAI_DEPLOYMENT = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
+# Alternativa a la identidad de Azure para servidores fuera de Azure (p. ej.
+# Docker en otro proveedor). Si está definida, se usa en lugar del token.
+AZURE_OPENAI_API_KEY = os.environ.get("AZURE_OPENAI_API_KEY", "")
 AZURE_OPENAI_API_VERSION = os.environ.get(
     "AZURE_OPENAI_API_VERSION",
     "2024-10-21",
