@@ -18,9 +18,11 @@ from django.db import DatabaseError, connection
 from django.db.models import Count
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
 from django.http import FileResponse, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.utils.encoding import force_str
 from django.utils.text import slugify
+from django.utils import timezone
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.csrf import ensure_csrf_cookie, csrf_protect
 from django.views.decorators.http import require_GET, require_POST
@@ -33,6 +35,7 @@ from rest_framework.decorators import (
 )
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from kombu.exceptions import OperationalError
 
 from .models import (
     EjecucionPortafolio,
@@ -41,6 +44,7 @@ from .models import (
     OptimizacionPortafolio,
     VerificacionCorreo,
     PerfilUsuario,
+    OptimizationJob,
 )
 from .serializers import (
     ProblemaOptimizacionSerializer,
@@ -58,13 +62,9 @@ from .account_services import (
     send_password_reset_email,
     send_verification_email,
 )
-from .portfolio import (
-    calcular_frontera_eficiente,
-    optimizar_media_varianza,
-)
 from .portfolio_import import preview_portfolio_csv
-from .services import resolver_problema
 from .reporting import build_portfolio_report, build_problem_report
+from .tasks import expire_stale_jobs, run_optimization_job
 from .ai_modeling import (
     AzureOpenAIConfigurationError,
     AzureOpenAIServiceError,
@@ -80,6 +80,87 @@ from .throttles import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _active_job_exists(**filters):
+    expire_stale_jobs(**filters)
+    return OptimizationJob.objects.filter(
+        status__in=[
+            OptimizationJob.Status.QUEUED,
+            OptimizationJob.Status.RUNNING,
+        ],
+        **filters,
+    ).exists()
+
+
+def _create_optimization_job(
+    request,
+    *,
+    job_type,
+    snapshot,
+    problem=None,
+    portfolio=None,
+):
+    target_model = type(problem) if problem is not None else type(portfolio)
+    target = problem if problem is not None else portfolio
+    target_filter = (
+        {"problem": problem} if problem is not None else {"portfolio": portfolio}
+    )
+    with transaction.atomic():
+        # Bloquea el modelo para que dos solicitudes simultáneas no encolen
+        # dos cálculos sobre el mismo problema o portafolio.
+        target_model.objects.select_for_update().get(pk=target.pk)
+        if _active_job_exists(**target_filter):
+            return Response(
+                {
+                    "detail": (
+                        "Ya hay un cálculo en curso para este modelo. "
+                        "Espera a que termine."
+                    )
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        job = OptimizationJob.objects.create(
+            owner=request.user,
+            problem=problem,
+            portfolio=portfolio,
+            job_type=job_type,
+            input_snapshot=json.loads(
+                json.dumps(snapshot, cls=DjangoJSONEncoder)
+            ),
+        )
+    try:
+        task = run_optimization_job.delay(str(job.pk))
+    except OperationalError:
+        logger.exception("No se pudo enviar el trabajo %s a Celery.", job.pk)
+        job.status = OptimizationJob.Status.FAILED
+        job.error = (
+            "El servicio de cálculos no está disponible. "
+            "Inicia Redis y el worker de Celery."
+        )
+        job.completed_at = timezone.now()
+        job.save(update_fields=["status", "error", "completed_at"])
+        return Response(
+            {"detail": job.error},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    job.celery_task_id = task.id
+    job.save(update_fields=["celery_task_id"])
+    job.refresh_from_db(fields=["status"])
+    status_url = reverse(
+        "optimizacion:optimization_job_detail",
+        kwargs={"job_id": job.pk},
+    )
+    return Response(
+        {
+            "id": str(job.pk),
+            "status": job.status,
+            "status_url": status_url,
+        },
+        status=status.HTTP_202_ACCEPTED,
+        headers={"Location": status_url},
+    )
 
 
 def _json_body(request):
@@ -707,6 +788,13 @@ def detalle_problema(request, problema_id):
         pk=problema_id,
         propietario=request.user,
     )
+    if request.method in {"DELETE", "PUT"} and _active_job_exists(
+        problem=problema,
+    ):
+        return Response(
+            {"detail": "Espera a que termine el cálculo antes de modificar el modelo."},
+            status=status.HTTP_409_CONFLICT,
+        )
     if request.method == "DELETE":
         problema.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -736,7 +824,7 @@ def detalle_problema(request, problema_id):
 @permission_classes([IsAuthenticated])
 @throttle_classes([ResolverRateThrottle])
 def resolver_problema_api(request, problema_id):
-    """Ejecuta el solucionador y devuelve el resultado."""
+    """Encola el solucionador y devuelve la referencia al trabajo."""
     problema = get_object_or_404(
         ProblemaOptimizacion,
         pk=problema_id,
@@ -749,24 +837,33 @@ def resolver_problema_api(request, problema_id):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    ejecucion = resolver_problema(problema.id)
+    return _create_optimization_job(
+        request,
+        job_type=OptimizationJob.Type.PROBLEM,
+        problem=problema,
+        snapshot=ProblemaOptimizacionSerializer(problema).data,
+    )
 
-    serializer = EjecucionOptimizacionSerializer(ejecucion)
 
-    if ejecucion.estado == EjecucionOptimizacion.Estado.ERROR:
-        return Response(
-            {
-                "detail": (
-                    "El solucionador no pudo completar el modelo. "
-                    "Revisa los datos e inténtalo de nuevo."
-                )
-            },
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def detalle_trabajo_optimizacion(request, job_id):
+    job = get_object_or_404(
+        OptimizationJob,
+        pk=job_id,
+        owner=request.user,
+    )
     return Response(
-        serializer.data,
-        status=status.HTTP_200_OK,
+        {
+            "id": str(job.pk),
+            "type": job.job_type,
+            "status": job.status,
+            "error": job.error or None,
+            "created_at": job.created_at,
+            "started_at": job.started_at,
+            "completed_at": job.completed_at,
+            "result": job.result,
+        }
     )
 
 
@@ -826,6 +923,16 @@ def archivar_problema(request, problema_id):
         propietario=request.user,
         archivado=False,
     )
+    if _active_job_exists(problem=problema):
+        return Response(
+            {
+                "detail": (
+                    "Espera a que termine el cálculo antes de archivar "
+                    "el modelo."
+                )
+            },
+            status=status.HTTP_409_CONFLICT,
+        )
     problema.archivado = True
     problema.save(update_fields=["archivado", "actualizado_en"])
     return Response(status=status.HTTP_204_NO_CONTENT)
@@ -908,23 +1015,6 @@ def _portfolio_values(validated_data):
     return values
 
 
-def _portfolio_solver_inputs(item):
-    count = len(item.activos)
-    minimums = item.pesos_minimos or [0] * count
-    maximums = item.pesos_maximos or [1] * count
-    return {
-        "bounds": list(zip(
-            [float(value) for value in minimums],
-            [float(value) for value in maximums],
-        )),
-        "categorias": item.categorias or [""] * count,
-        "limites_categoria": {
-            name: float(value)
-            for name, value in item.limites_categoria.items()
-        },
-    }
-
-
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])
 def listar_portafolios(request):
@@ -978,6 +1068,11 @@ def detalle_portafolio(request, portafolio_id):
     )
     if request.method == "GET":
         return Response(OptimizacionPortafolioSerializer(item).data)
+    if _active_job_exists(portfolio=item):
+        return Response(
+            {"detail": "Espera a que termine el cálculo antes de modificar el portafolio."},
+            status=status.HTTP_409_CONFLICT,
+        )
     if request.method == "DELETE":
         item.archivado = True
         item.save(update_fields=["archivado", "actualizado_en"])
@@ -1066,37 +1161,15 @@ def resolver_portafolio(request, portafolio_id):
         propietario=request.user,
         archivado=False,
     )
-    try:
-        result = optimizar_media_varianza(
-            [float(value) for value in item.rendimientos_esperados],
-            [
-                [float(value) for value in row]
-                for row in item.covarianza
-            ],
-            float(item.aversion_riesgo),
-            **_portfolio_solver_inputs(item),
-            periodos_por_anio=item.periodos_por_anio,
-            escenarios_estres={
-                name: [float(value) for value in returns]
-                for name, returns in item.escenarios_estres.items()
-            },
-        )
-    except (ValueError, ArithmeticError):
-        logger.exception("No se pudo optimizar el portafolio %s.", item.pk)
-        return Response(
-            {"detail": "No se pudo encontrar una solución válida."},
-            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        )
-
-    execution = EjecucionPortafolio.objects.create(
-        optimizacion=item,
-        modelo_snapshot=OptimizacionPortafolioSerializer(item).data,
-        **result,
+    return _create_optimization_job(
+        request,
+        job_type=OptimizationJob.Type.PORTFOLIO,
+        portfolio=item,
+        snapshot=OptimizacionPortafolioSerializer(item).data,
     )
-    return Response(EjecucionPortafolioSerializer(execution).data)
 
 
-@api_view(["GET"])
+@api_view(["POST"])
 @permission_classes([IsAuthenticated])
 @throttle_classes([ResolverRateThrottle])
 def frontera_portafolio(request, portafolio_id):
@@ -1106,22 +1179,12 @@ def frontera_portafolio(request, portafolio_id):
         propietario=request.user,
         archivado=False,
     )
-    try:
-        frontier = calcular_frontera_eficiente(
-            [float(value) for value in item.rendimientos_esperados],
-            [[float(value) for value in row] for row in item.covarianza],
-            **_portfolio_solver_inputs(item),
-        )
-    except (ValueError, ArithmeticError):
-        logger.exception("No se pudo calcular la frontera del portafolio %s.", item.pk)
-        return Response(
-            {"detail": "No se pudo calcular una frontera eficiente válida."},
-            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        )
-    return Response({
-        "activos": item.activos,
-        "puntos": frontier,
-    })
+    return _create_optimization_job(
+        request,
+        job_type=OptimizationJob.Type.FRONTIER,
+        portfolio=item,
+        snapshot=OptimizacionPortafolioSerializer(item).data,
+    )
 
 
 @api_view(["GET"])

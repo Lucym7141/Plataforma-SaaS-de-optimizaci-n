@@ -407,3 +407,58 @@ class RateLimitCounter(models.Model):
     key = models.CharField(max_length=64, unique=True)
     count = models.PositiveIntegerField(default=0)
     expires_at = models.DateTimeField(db_index=True)
+
+
+class OptimizationJob(models.Model):
+    class Type(models.TextChoices):
+        PROBLEM = "problem", "Problema"
+        PORTFOLIO = "portfolio", "Portafolio"
+        FRONTIER = "frontier", "Frontera eficiente"
+
+    class Status(models.TextChoices):
+        QUEUED = "queued", "En cola"
+        RUNNING = "running", "En proceso"
+        COMPLETED = "completed", "Completado"
+        FAILED = "failed", "Fallido"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="optimization_jobs",
+    )
+    problem = models.ForeignKey(
+        ProblemaOptimizacion,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="optimization_jobs",
+    )
+    portfolio = models.ForeignKey(
+        OptimizacionPortafolio,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="optimization_jobs",
+    )
+    job_type = models.CharField(max_length=16, choices=Type.choices)
+    status = models.CharField(
+        max_length=12,
+        choices=Status.choices,
+        default=Status.QUEUED,
+        db_index=True,
+    )
+    input_snapshot = models.JSONField(default=dict)
+    result = models.JSONField(null=True, blank=True)
+    error = models.TextField(blank=True)
+    celery_task_id = models.CharField(max_length=255, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["owner", "status"]),
+            models.Index(fields=["created_at"]),
+        ]

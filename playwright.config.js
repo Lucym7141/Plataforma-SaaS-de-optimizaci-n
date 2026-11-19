@@ -38,7 +38,8 @@ module.exports = defineConfig({
             DJANGO_SQLITE_PATH: e2eDatabasePath,
             DJANGO_DEBUG: "true",
             // The serial E2E suite signs in repeatedly from the same IP.
-            AUTH_LOGIN_LIMIT: "100/m"
+            AUTH_LOGIN_LIMIT: "100/m",
+            CELERY_TASK_ALWAYS_EAGER: "true"
         }
     },
     globalSetup: "./tests/e2e/global-setup.js",
