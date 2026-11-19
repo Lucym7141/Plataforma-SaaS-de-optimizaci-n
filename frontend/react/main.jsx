@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
 const initialPreview = {
@@ -294,7 +294,7 @@ function ProblemAuthor() {
         }
     };
 
-    const useTemplate = (template) => {
+    const applyTemplate = (template) => {
         setEditingId(null);
         setName(template.name);
         setDescription(template.description);
@@ -594,7 +594,7 @@ function ProblemAuthor() {
                             <button
                                 className="secondary-button"
                                 type="button"
-                                onClick={() => useTemplate(template)}
+                                onClick={() => applyTemplate(template)}
                             >
                                 Usar plantilla
                             </button>

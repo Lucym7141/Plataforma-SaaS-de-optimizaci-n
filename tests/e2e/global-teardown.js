@@ -4,8 +4,10 @@ const {
     getE2EEnvironment,
     removeE2EDatabase
 } = require("./environment");
+const { stopCeleryWorker } = require("./celery-worker");
 
 module.exports = async () => {
+    await stopCeleryWorker();
     const windowsPython = "..\\.venv\\Scripts\\python.exe";
     const python = process.env.PYTHON ||
         (process.platform === "win32" && fs.existsSync(`backend\\${windowsPython}`)

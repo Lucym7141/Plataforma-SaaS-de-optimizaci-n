@@ -94,6 +94,25 @@ async function requestJSON(url, options = {}) {
     return data;
 }
 
+async function waitForOptimizationJob(submission, onUpdate = () => {}) {
+    const deadline = Date.now() + 16 * 60 * 1000;
+    let delay = 750;
+
+    while (Date.now() < deadline) {
+        const job = await requestJSON(submission.status_url);
+        if (job.status === "completed") return job.result;
+        if (job.status === "failed") {
+            throw new Error(job.error || "El cálculo no pudo completarse.");
+        }
+
+        onUpdate(job.status);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        delay = Math.min(Math.round(delay * 1.5), 2500);
+    }
+
+    throw new Error("El cálculo sigue en proceso. Consulta el historial más tarde.");
+}
+
 async function downloadExecutionReport(target, format, button) {
     const message = document.querySelector(
         `[data-report-message="${target}"]`
@@ -231,7 +250,6 @@ function formatNumber(value) {
 function renderPortfolioComparisonInputs(execution) {
     const snapshot = execution.modelo_snapshot;
     const weights = document.getElementById("portfolio-comparison-weights");
-    const form = document.getElementById("portfolio-comparison-form");
     const message = document.getElementById("portfolio-comparison-message");
     const results = document.getElementById("portfolio-comparison-results");
     portfolioComparisonExecution = execution;
@@ -1643,7 +1661,8 @@ async function loadPortfolios() {
         list.querySelectorAll("[data-action]").forEach((button) => {
             button.addEventListener("click", () => managePortfolio(
                 button.dataset.action,
-                button.dataset.id
+                button.dataset.id,
+                button
             ));
         });
     } catch (error) {
@@ -1651,10 +1670,17 @@ async function loadPortfolios() {
     }
 }
 
-async function managePortfolio(action, id) {
+async function managePortfolio(action, id, triggerButton = null) {
     const url = `${API_URL}/portafolios/${encodeURIComponent(id)}/`;
     const message = document.getElementById("portfolio-message");
     message.hidden = true;
+    const isLongOperation = action === "solve" || action === "frontier";
+    if (isLongOperation && triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.textContent = action === "solve"
+            ? "En cola..."
+            : "Calculando...";
+    }
     try {
         if (action === "edit") {
             const portfolio = await requestJSON(url);
@@ -1672,7 +1698,19 @@ async function managePortfolio(action, id) {
             lastPortfolioExecutionId = null;
             document.getElementById("portfolio-result").hidden = true;
             document.querySelector('[data-report-message="portfolio"]').hidden = true;
-            const result = await requestJSON(`${url}resolver/`, { method: "POST" });
+            message.classList.remove("error-message");
+            message.textContent = "En cola...";
+            message.hidden = false;
+            const submission = await requestJSON(`${url}resolver/`, { method: "POST" });
+            const result = await waitForOptimizationJob(
+                submission,
+                (jobStatus) => {
+                    message.textContent = jobStatus === "queued"
+                        ? "En cola..."
+                        : "Optimizando portafolio...";
+                }
+            );
+            message.hidden = true;
             lastPortfolioExecutionId = result.id;
             document.getElementById("portfolio-result-values").innerHTML = `
                 <div class="solution-card"><span>Rendimiento esperado</span><strong>${formatNumber(result.rendimientos_portafolio)}</strong></div>
@@ -1698,7 +1736,22 @@ async function managePortfolio(action, id) {
             return;
         }
         if (action === "frontier") {
-            const result = await requestJSON(`${url}frontera/`);
+            message.classList.remove("error-message");
+            message.textContent = "En cola...";
+            message.hidden = false;
+            const submission = await requestJSON(
+                `${url}frontera/`,
+                { method: "POST" }
+            );
+            const result = await waitForOptimizationJob(
+                submission,
+                (jobStatus) => {
+                    message.textContent = jobStatus === "queued"
+                        ? "En cola..."
+                        : "Calculando frontera eficiente...";
+                }
+            );
+            message.hidden = true;
             renderFrontier(result);
             return;
         }
@@ -1721,6 +1774,13 @@ async function managePortfolio(action, id) {
         message.textContent = error.message;
         message.classList.add("error-message");
         message.hidden = false;
+    } finally {
+        if (isLongOperation && triggerButton) {
+            triggerButton.disabled = false;
+            triggerButton.textContent = action === "solve"
+                ? "Optimizar"
+                : "Frontera eficiente";
+        }
     }
 }
 
@@ -2041,9 +2101,17 @@ async function solveProblem() {
     document.querySelector('[data-report-message="problem"]').hidden = true;
 
     try {
-        const result = await requestJSON(
+        const submission = await requestJSON(
             `${API_URL}/problemas/${encodeURIComponent(selectedProblemId)}/resolver/`,
             { method: "POST" }
+        );
+        const result = await waitForOptimizationJob(
+            submission,
+            (jobStatus) => {
+                solveButton.textContent = jobStatus === "queued"
+                    ? "En cola..."
+                    : "Calculando...";
+            }
         );
 
         const status = result.estado;
@@ -2412,7 +2480,8 @@ document.getElementById("dashboard-portfolios").addEventListener("click", (event
     navigateAppView("#portfolio-panel");
     managePortfolio(
         button.dataset.dashboardPortfolioAction,
-        button.dataset.dashboardPortfolioId
+        button.dataset.dashboardPortfolioId,
+        button
     );
     document.querySelector(".portfolio-panel")?.scrollIntoView({
         behavior: "smooth",
@@ -2461,7 +2530,7 @@ if (authTabs) {
         const currentIndex = tabs.indexOf(document.activeElement);
         if (currentIndex === -1) return;
 
-        let nextIndex = currentIndex;
+        let nextIndex;
         if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
             nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
         } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {

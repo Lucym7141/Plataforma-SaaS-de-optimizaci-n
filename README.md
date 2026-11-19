@@ -19,8 +19,29 @@ Desde PowerShell en la raíz del repositorio:
 ```powershell
 npm ci
 npm run build
+docker compose up -d redis
 cd backend
+$env:DJANGO_DEBUG = "true"
 ..\.venv\Scripts\python.exe manage.py migrate
+```
+
+`DEBUG` está desactivado por defecto para que un despliegue sin configurar
+falle de forma segura. `manage.py runserver` y `manage.py test` lo activan
+solos; para los demás comandos y el worker define `DJANGO_DEBUG=true` en la
+terminal de desarrollo.
+
+En una terminal, inicia el worker de Celery:
+
+```powershell
+cd backend
+$env:DJANGO_DEBUG = "true"
+..\.venv\Scripts\celery.exe -A config worker --pool=solo --loglevel=info
+```
+
+En otra terminal, inicia Django:
+
+```powershell
+cd backend
 ..\.venv\Scripts\python.exe manage.py runserver
 ```
 
@@ -30,6 +51,13 @@ incorporar componentes React nuevos, ejecuta `npm run build` antes de iniciar
 Django. Abre `http://127.0.0.1:8000` para registrarte o iniciar sesión. En desarrollo,
 los mensajes de verificación y recuperación se imprimen en la consola del
 servidor.
+
+Las optimizaciones y las fronteras eficientes se guardan como trabajos y la
+interfaz consulta su estado mientras Celery las procesa. Redis sirve de broker;
+los estados y resultados permanecen en la base de datos. Para pruebas locales
+sin Redis, define `CELERY_TASK_ALWAYS_EAGER=true`; ese modo ejecuta la tarea
+dentro del proceso web y no debe usarse como cola de producción. En Windows,
+usa `--pool=solo` para el worker local.
 
 ## Asistente de modelos con Azure OpenAI
 
@@ -97,6 +125,9 @@ En producción configura:
   Usa `EMAIL_USE_TLS=true` o `EMAIL_USE_SSL=true`, nunca ambos.
 - `DATABASE_URL` con una URL PostgreSQL, por ejemplo
   `postgresql://usuario:clave@db.example.com:5432/opti?sslmode=require`
+- `CELERY_BROKER_URL` con la URL privada de Redis accesible tanto por Django
+  como por los workers; usa TLS y autenticación en producción. Ejecuta al menos
+  un worker con `celery -A config worker --loglevel=info`.
 - `DJANGO_ALLOW_REGISTRATION=false` para cerrar el registro público. Es el
   valor predeterminado cuando `DEBUG` está desactivado.
 - `DJANGO_MEDIA_ROOT` opcional para definir el almacenamiento de fotos de

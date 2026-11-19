@@ -55,6 +55,53 @@ def _feasible_return_extremes(mu, categories, category_caps, bounds):
     return float(mu @ minimum.x), float(mu @ maximum.x), minimum.x, maximum.x
 
 
+def _is_feasible(
+    weights,
+    mu,
+    categories,
+    category_caps,
+    bounds,
+    minimum_return=None,
+):
+    weights = np.asarray(weights, dtype=float)
+    tolerance = 1e-7
+    if (
+        weights.shape != (len(mu),)
+        or len(categories) != len(mu)
+        or len(bounds) != len(mu)
+        or not np.all(np.isfinite(weights))
+        or abs(float(np.sum(weights)) - 1) > tolerance
+    ):
+        return False
+
+    for weight, (lower, upper) in zip(weights, bounds, strict=False):
+        if (
+            (lower is not None and weight < float(lower) - tolerance)
+            or (upper is not None and weight > float(upper) + tolerance)
+        ):
+            return False
+
+    for category, cap in category_caps.items():
+        category_weight = sum(
+            weight
+            for weight, name in zip(weights, categories, strict=False)
+            if name == category
+        )
+        if category_weight > float(cap) + tolerance:
+            return False
+
+    if minimum_return is not None:
+        return_tolerance = tolerance * max(
+            1.0,
+            abs(minimum_return),
+            float(np.max(np.abs(mu))),
+        )
+        if float(mu @ weights) < minimum_return - return_tolerance:
+            return False
+
+    return True
+
+
 def optimizar_media_varianza(
     rendimientos,
     covarianza,
@@ -90,14 +137,16 @@ def optimizar_media_varianza(
         constraints=_constraints(mu, categories, category_caps),
         options={"maxiter": 500, "ftol": 1e-12},
     )
-    if (
-        not result.success
-        or not np.all(np.isfinite(result.x))
-        or abs(float(np.sum(result.x)) - 1) > 1e-7
+    if not result.success or not _is_feasible(
+        result.x,
+        mu,
+        categories,
+        category_caps,
+        bounds,
     ):
         raise ValueError("No se encontró una solución de portafolio válida.")
 
-    weights = result.x
+    weights = np.asarray(result.x, dtype=float)
     variance = float(weights @ sigma @ weights)
     if variance < -1e-10:
         raise ValueError("La matriz de covarianza produjo varianza negativa.")
@@ -177,9 +226,16 @@ def calcular_frontera_eficiente(
             ),
             options={"maxiter": 500, "ftol": 1e-12},
         )
-        if not result.success or not np.all(np.isfinite(result.x)):
+        if not result.success or not _is_feasible(
+            result.x,
+            mu,
+            categories,
+            category_caps,
+            bounds,
+            minimum_return=float(target),
+        ):
             raise ValueError("No se pudo calcular toda la frontera eficiente.")
-        weights = result.x
+        weights = np.asarray(result.x, dtype=float)
         variance = max(float(weights @ sigma @ weights), 0.0)
         achieved_return = float(mu @ weights)
         frontier.append({

@@ -23,6 +23,11 @@ test("auth screen exposes accessible tabs, labels, and password visibility", asy
     await page.goto("/");
     await expect(page.locator("#auth-panel")).toBeVisible();
     await expect(page.locator(".auth-visual")).toBeVisible();
+    await expect(page.locator(".auth-visual")).toContainText("Supuestos");
+    await expect(page.locator(".auth-visual")).toContainText("Datos ingresados por ti");
+    await expect(page.locator(".auth-visual")).not.toContainText("+18.2%");
+    await expect(page.locator(".auth-visual")).not.toContainText("12.4%");
+    await expect(page.locator(".auth-visual")).toContainText("HTTPS en producción");
     await expect(page.locator("#login-form")).toBeVisible();
     await expect(page.locator("#login-tab")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#login-username")).toHaveAccessibleName("Usuario");
@@ -1075,8 +1080,14 @@ test("user can load and create a model from the template library", async ({ page
     );
     await page.getByRole("button", { name: "Resolver problema" }).click();
     const solveResponse = await solvePromise;
-    expect(solveResponse.status()).toBe(200);
-    const solution = await solveResponse.json();
+    expect(solveResponse.status()).toBe(202);
+    const submission = await solveResponse.json();
+    const solutionJob = await page.evaluate(async (statusUrl) => {
+        const response = await fetch(statusUrl);
+        return response.json();
+    }, submission.status_url);
+    expect(solutionJob.status).toBe("completed");
+    const solution = solutionJob.result;
     expect(solution.estado).toBe("OPT");
     expect(Number(solution.valor_objetivo)).toBeCloseTo(953333.33, 1);
     const allocations = Object.fromEntries(
@@ -1090,6 +1101,7 @@ test("user can load and create a model from the template library", async ({ page
     expect(allocations.x3).toBeCloseTo(0, 5);
     expect(allocations.x4).toBeCloseTo(8 / 3, 5);
     expect(allocations.x5).toBeCloseTo(16 / 3, 5);
+    await expect(page.locator("#result-status")).toHaveText("Óptimo");
 
     page.once("dialog", (dialog) => dialog.accept());
     const portfolioDeletePromise = page.waitForResponse((response) =>

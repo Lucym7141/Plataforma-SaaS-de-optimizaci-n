@@ -49,7 +49,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-DEBUG = env_bool("DJANGO_DEBUG", True)
+# Desactivado por defecto: un despliegue sin configurar falla de forma segura.
+# manage.py lo activa para runserver y test (ver DEV_COMMANDS allí).
+DEBUG = env_bool("DJANGO_DEBUG", False)
 ALLOW_REGISTRATION = env_bool("DJANGO_ALLOW_REGISTRATION", DEBUG)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
@@ -108,6 +110,25 @@ OPTIMIZER_MAX_ABS_VALUE = int(
 OPTIMIZER_TIME_LIMIT_SECONDS = int(
     os.environ.get("OPTIMIZER_TIME_LIMIT_SECONDS", "30")
 )
+CELERY_BROKER_URL = os.environ.get(
+    "CELERY_BROKER_URL",
+    "redis://127.0.0.1:6379/0",
+)
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "socket_connect_timeout": 3,
+    "socket_timeout": 3,
+    "visibility_timeout": 1800,
+}
+CELERY_TASK_PUBLISH_RETRY = False
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER")
+CELERY_TASK_EAGER_PROPAGATES = env_bool("CELERY_TASK_EAGER_PROPAGATES")
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_SOFT_TIME_LIMIT = 840
+CELERY_TASK_TIME_LIMIT = 900
 MAX_PORTFOLIO_ASSETS = int(os.environ.get("MAX_PORTFOLIO_ASSETS", "100"))
 SUBSCRIPTION_PLANS = load_subscription_plans(
     os.environ.get("SUBSCRIPTION_PLANS_JSON", "")
