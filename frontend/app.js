@@ -1195,7 +1195,13 @@ function portfolioPayload() {
     const form = document.getElementById("portfolio-form");
     const parseOptionalJson = (value, fallback) =>
         value.trim() ? JSON.parse(value) : fallback;
+    if (!form.elements.nombre.value.trim()) {
+        throw new Error("Escribe un nombre para el portafolio.");
+    }
     const assetNames = form.elements.activos.value.split(",").map((name) => name.trim());
+    if (!assetNames.some(Boolean)) {
+        throw new Error("Añade al menos un activo.");
+    }
     const categories = form.elements.categorias.value.trim()
         ? form.elements.categorias.value.split(",").map((name) => name.trim())
         : assetNames.map(() => "");
@@ -1234,6 +1240,7 @@ function resetPortfolioForm() {
     document.getElementById("portfolio-cancel-edit").hidden = true;
     document.querySelector("#portfolio-form button[type='submit']").textContent =
         "Guardar portafolio";
+    renderPortfolioEditor();
 }
 
 function fillPortfolioForm(portfolio) {
@@ -1251,7 +1258,282 @@ function fillPortfolioForm(portfolio) {
     form.elements.periodos_por_anio.value = portfolio.periodos_por_anio;
     form.elements.escenarios_estres.value = JSON.stringify(portfolio.escenarios_estres);
     form.elements.aversion_riesgo.value = portfolio.aversion_riesgo;
+    const hasAdvancedOptions =
+        Object.keys(portfolio.limites_categoria || {}).length > 0 ||
+        Object.keys(portfolio.escenarios_estres || {}).length > 0;
+    if (hasAdvancedOptions) {
+        form.querySelector(".portfolio-advanced:not(.portfolio-json)").open = true;
+    }
+    renderPortfolioEditor();
 }
+
+// Editor visual del portafolio: una tabla de activos (en %) y la matriz de
+// covarianza en cuadrícula. Los campos JSON del formulario siguen siendo la
+// fuente de datos; el editor los lee y los vuelve a escribir.
+const PORTFOLIO_JSON_FIELDS = [
+    "activos", "categorias", "rendimientos", "covarianza", "pesos_minimos", "pesos_maximos"
+];
+
+function toPercent(value) {
+    return Number((Number(value) * 100).toFixed(6));
+}
+
+function fromPercent(value) {
+    return Number((Number(value) / 100).toFixed(8));
+}
+
+function volatilityText(variance) {
+    const value = Number(variance);
+    return value > 0
+        ? `${formatNumber(Number(toPercent(Math.sqrt(value)).toFixed(2)))} %`
+        : "—";
+}
+
+function readPortfolioEditorState() {
+    const form = document.getElementById("portfolio-form");
+    const parseList = (value, fallback) => {
+        const parsed = value.trim() ? JSON.parse(value) : fallback;
+        if (!Array.isArray(parsed)) throw new SyntaxError("Se esperaba una lista.");
+        return parsed;
+    };
+    const names = form.elements.activos.value.trim()
+        ? form.elements.activos.value.split(",").map((name) => name.trim())
+        : [];
+    const size = names.length;
+    const fit = (list, filler) =>
+        Array.from({ length: size }, (_, index) =>
+            list[index] === undefined || list[index] === null ? filler : list[index]);
+    const categoryText = form.elements.categorias.value.trim();
+    const categories = categoryText
+        ? categoryText.split(",").map((name) => name.trim())
+        : [];
+    const covariance = parseList(form.elements.covarianza.value, []);
+    return {
+        names,
+        categories: fit(categories, ""),
+        returns: fit(parseList(form.elements.rendimientos.value, []), 0),
+        minimums: fit(parseList(form.elements.pesos_minimos.value, []), 0),
+        maximums: fit(parseList(form.elements.pesos_maximos.value, []), 1),
+        covariance: Array.from({ length: size }, (_, row) =>
+            fit(Array.isArray(covariance[row]) ? covariance[row] : [], 0))
+    };
+}
+
+function writePortfolioEditorState(state) {
+    const form = document.getElementById("portfolio-form");
+    form.elements.activos.value = state.names.join(", ");
+    form.elements.categorias.value = state.categories.some(Boolean)
+        ? state.categories.join(", ")
+        : "";
+    form.elements.rendimientos.value = JSON.stringify(state.returns);
+    form.elements.covarianza.value = JSON.stringify(state.covariance);
+    form.elements.pesos_minimos.value = JSON.stringify(state.minimums);
+    form.elements.pesos_maximos.value = JSON.stringify(state.maximums);
+}
+
+let portfolioEditorState = null;
+
+function renderPortfolioEditor() {
+    const assetsEditor = document.getElementById("portfolio-assets-editor");
+    const covarianceEditor = document.getElementById("portfolio-covariance-editor");
+    try {
+        portfolioEditorState = readPortfolioEditorState();
+    } catch {
+        portfolioEditorState = null;
+        const note = '<p class="portfolio-editor-note">Corrige el texto JSON de «Editar los datos como texto» para ver las tablas.</p>';
+        assetsEditor.innerHTML = note;
+        covarianceEditor.innerHTML = "";
+        return;
+    }
+    const state = portfolioEditorState;
+    const numberInput = (attributes, value) =>
+        `<input type="number" step="any" inputmode="decimal" ${attributes} value="${escapeHTML(String(value))}">`;
+
+    const rows = state.names.map((name, index) => `
+        <tr>
+            <td data-label="Activo">
+                <input type="text" maxlength="80" data-asset-field="name" data-index="${index}"
+                    aria-label="Nombre del activo ${index + 1}" value="${escapeHTML(name)}" placeholder="Activo ${index + 1}">
+            </td>
+            <td data-label="Categoría">
+                <input type="text" maxlength="80" data-asset-field="category" data-index="${index}"
+                    aria-label="Categoría de ${escapeHTML(name || `activo ${index + 1}`)}" value="${escapeHTML(state.categories[index])}" placeholder="Opcional">
+            </td>
+            <td data-label="Rendimiento esperado">
+                <span class="portfolio-percent-input">${numberInput(
+                    `data-asset-field="return" data-index="${index}" aria-label="Rendimiento esperado de ${escapeHTML(name || `activo ${index + 1}`)} en porcentaje"`,
+                    toPercent(state.returns[index])
+                )}<span aria-hidden="true">%</span></span>
+            </td>
+            <td data-label="Peso mínimo">
+                <span class="portfolio-percent-input">${numberInput(
+                    `min="0" max="100" data-asset-field="minimum" data-index="${index}" aria-label="Peso mínimo de ${escapeHTML(name || `activo ${index + 1}`)} en porcentaje"`,
+                    toPercent(state.minimums[index])
+                )}<span aria-hidden="true">%</span></span>
+            </td>
+            <td data-label="Peso máximo">
+                <span class="portfolio-percent-input">${numberInput(
+                    `min="0" max="100" data-asset-field="maximum" data-index="${index}" aria-label="Peso máximo de ${escapeHTML(name || `activo ${index + 1}`)} en porcentaje"`,
+                    toPercent(state.maximums[index])
+                )}<span aria-hidden="true">%</span></span>
+            </td>
+            <td class="portfolio-asset-remove">
+                <button class="icon-button" type="button" data-remove-asset="${index}"
+                    aria-label="Quitar ${escapeHTML(name || `activo ${index + 1}`)}" title="Quitar activo">✕</button>
+            </td>
+        </tr>`).join("");
+
+    assetsEditor.innerHTML = `
+        ${state.names.length ? `
+        <div class="table-scroll">
+            <table class="portfolio-assets-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Activo</th>
+                        <th scope="col">Categoría</th>
+                        <th scope="col">Rendimiento esperado</th>
+                        <th scope="col">Peso mínimo</th>
+                        <th scope="col">Peso máximo</th>
+                        <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>` : '<p class="portfolio-editor-note">Todavía no hay activos. Añade el primero o genera un borrador con IA.</p>'}
+        <button class="secondary-button" type="button" data-add-asset>＋ Añadir activo</button>`;
+
+    if (!state.names.length) {
+        covarianceEditor.innerHTML =
+            '<p class="portfolio-editor-note">La matriz aparecerá cuando añadas activos.</p>';
+        return;
+    }
+    const label = (index) => escapeHTML(state.names[index] || `Activo ${index + 1}`);
+    const header = state.names.map((_, index) =>
+        `<th scope="col" data-asset-label="${index}">${label(index)}</th>`).join("");
+    const body = state.covariance.map((row, rowIndex) => `
+        <tr>
+            <th scope="row" data-asset-label="${rowIndex}">${label(rowIndex)}</th>
+            ${row.map((value, columnIndex) => `
+                <td class="${rowIndex === columnIndex ? "is-diagonal" : ""}">${numberInput(
+                    `data-cov-row="${rowIndex}" data-cov-col="${columnIndex}" aria-label="Covarianza entre ${label(rowIndex)} y ${label(columnIndex)}"`,
+                    value
+                )}</td>`).join("")}
+        </tr>`).join("");
+    const volatilities = state.names.map((_, index) => {
+        const text = volatilityText(state.covariance[index][index]);
+        return `<span class="portfolio-volatility-chip"><span data-asset-label="${index}">${label(index)}</span><strong data-volatility="${index}">${text}</strong></span>`;
+    }).join("");
+    covarianceEditor.innerHTML = `
+        <div class="table-scroll">
+            <table class="portfolio-covariance-table">
+                <thead><tr><th scope="col"><span class="visually-hidden">Activo</span></th>${header}</tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>
+        <div class="portfolio-volatilities" aria-live="polite">
+            <span class="portfolio-hint">Volatilidad implícita (raíz de la diagonal):</span>
+            ${volatilities}
+        </div>`;
+}
+
+function updateVolatilityChip(index) {
+    const chip = document.querySelector(`[data-volatility="${index}"]`);
+    if (!chip || !portfolioEditorState) return;
+    chip.textContent = volatilityText(portfolioEditorState.covariance[index][index]);
+}
+
+function resizePortfolioState(state, size) {
+    const resize = (list, filler) =>
+        Array.from({ length: size }, (_, index) => (index < list.length ? list[index] : filler));
+    state.categories = resize(state.categories, "");
+    state.returns = resize(state.returns, 0);
+    state.minimums = resize(state.minimums, 0);
+    state.maximums = resize(state.maximums, 1);
+    state.covariance = Array.from({ length: size }, (_, row) =>
+        Array.from({ length: size }, (_, column) =>
+            (row < state.covariance.length && column < state.covariance.length
+                ? state.covariance[row][column]
+                : 0)));
+}
+
+document.getElementById("portfolio-assets-editor").addEventListener("input", (event) => {
+    const input = event.target.closest("[data-asset-field]");
+    if (!input || !portfolioEditorState) return;
+    const index = Number(input.dataset.index);
+    const state = portfolioEditorState;
+    const field = input.dataset.assetField;
+    if (field === "name" || field === "category") {
+        // La coma separa los activos en el formato de texto.
+        const clean = input.value.replace(/,/g, " ");
+        if (clean !== input.value) input.value = clean;
+        if (field === "name") {
+            state.names[index] = clean.trim();
+            document.querySelectorAll(`[data-asset-label="${index}"]`).forEach((cell) => {
+                cell.textContent = state.names[index] || `Activo ${index + 1}`;
+            });
+        } else {
+            state.categories[index] = clean.trim();
+        }
+    } else {
+        if (input.value === "" || Number.isNaN(Number(input.value))) return;
+        const key = { return: "returns", minimum: "minimums", maximum: "maximums" }[field];
+        state[key][index] = fromPercent(input.value);
+    }
+    writePortfolioEditorState(state);
+});
+
+document.getElementById("portfolio-assets-editor").addEventListener("click", (event) => {
+    if (!portfolioEditorState) return;
+    const state = portfolioEditorState;
+    if (event.target.closest("[data-add-asset]")) {
+        state.names.push(`Activo ${state.names.length + 1}`);
+        resizePortfolioState(state, state.names.length);
+        writePortfolioEditorState(state);
+        renderPortfolioEditor();
+        const inputs = document.querySelectorAll('[data-asset-field="name"]');
+        inputs[inputs.length - 1]?.select();
+        return;
+    }
+    const remove = event.target.closest("[data-remove-asset]");
+    if (!remove) return;
+    const index = Number(remove.dataset.removeAsset);
+    state.names.splice(index, 1);
+    state.categories.splice(index, 1);
+    state.returns.splice(index, 1);
+    state.minimums.splice(index, 1);
+    state.maximums.splice(index, 1);
+    state.covariance.splice(index, 1);
+    state.covariance.forEach((row) => row.splice(index, 1));
+    writePortfolioEditorState(state);
+    renderPortfolioEditor();
+});
+
+document.getElementById("portfolio-covariance-editor").addEventListener("input", (event) => {
+    const input = event.target.closest("[data-cov-row]");
+    if (!input || !portfolioEditorState) return;
+    if (input.value === "" || Number.isNaN(Number(input.value))) return;
+    const row = Number(input.dataset.covRow);
+    const column = Number(input.dataset.covCol);
+    const value = Number(input.value);
+    const state = portfolioEditorState;
+    state.covariance[row][column] = value;
+    state.covariance[column][row] = value;
+    if (row !== column) {
+        const mirror = document.querySelector(
+            `[data-cov-row="${column}"][data-cov-col="${row}"]`
+        );
+        if (mirror) mirror.value = input.value;
+    } else {
+        updateVolatilityChip(row);
+    }
+    writePortfolioEditorState(state);
+});
+
+PORTFOLIO_JSON_FIELDS.forEach((name) => {
+    document.getElementById("portfolio-form").elements[name]
+        .addEventListener("input", renderPortfolioEditor);
+});
+renderPortfolioEditor();
 
 function formatDashboardDate(value) {
     if (!value) return "Sin fecha";

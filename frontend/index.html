@@ -538,7 +538,7 @@
                     <button id="portfolio-refresh" class="icon-button" type="button" aria-label="Actualizar portafolios">↻</button>
                 </div>
             </div>
-            <p class="muted">Ingresa rendimientos esperados como fracciones (por ejemplo, 0.08 = 8 %) y una matriz de covarianza en el mismo periodo.</p>
+            <p class="muted">Ingresa el rendimiento esperado y el riesgo de cada activo; Vértice calcula la cartera que mejor equilibra ambos según tus supuestos.</p>
             <section id="portfolio-ai" class="portfolio-ai ai-card" aria-labelledby="portfolio-ai-title">
                 <div class="ai-card-heading">
                     <span class="ai-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></svg>IA</span>
@@ -567,37 +567,68 @@
                 <p id="portfolio-import-message" class="message" role="status" hidden></p>
                 <div id="portfolio-import-preview" class="solution-values" hidden></div>
             </details>
-            <form id="portfolio-form" class="portfolio-form">
-                <label for="portfolio-name">Nombre</label>
-                <input id="portfolio-name" name="nombre" maxlength="150" required>
-                <label for="portfolio-assets">Activos (separados por coma)</label>
-                <input id="portfolio-assets" name="activos" placeholder="Bono, Acción" required>
-                <label for="portfolio-categories">Categorías por activo (opcional, misma cantidad; coma separada)</label>
-                <input id="portfolio-categories" name="categorias" placeholder="Renta fija, Acciones">
-                <label for="portfolio-returns">Rendimientos esperados (JSON)</label>
-                <textarea id="portfolio-returns" name="rendimientos" rows="2" placeholder="[0.04, 0.10]" required></textarea>
-                <label for="portfolio-covariance">Matriz de covarianza (JSON)</label>
-                <textarea id="portfolio-covariance" name="covarianza" rows="3" placeholder="[[0.01, 0.002], [0.002, 0.04]]" required></textarea>
-                <label for="portfolio-minimums">Pesos mínimos por activo (JSON; predeterminado: todos 0)</label>
-                <textarea id="portfolio-minimums" name="pesos_minimos" rows="2" placeholder="[0, 0]"></textarea>
-                <label for="portfolio-maximums">Pesos máximos por activo (JSON; predeterminado: todos 1)</label>
-                <textarea id="portfolio-maximums" name="pesos_maximos" rows="2" placeholder="[1, 1]"></textarea>
-                <label for="portfolio-category-limits">Límite máximo por categoría (JSON opcional)</label>
-                <textarea id="portfolio-category-limits" name="limites_categoria" rows="2" placeholder='{"Acciones": 0.60}'></textarea>
-                <label for="portfolio-periods">Periodos por año para métricas anualizadas</label>
-                <select id="portfolio-periods" name="periodos_por_anio">
-                    <option value="1">Anual (1)</option>
-                    <option value="12">Mensual (12)</option>
-                    <option value="52">Semanal (52)</option>
-                    <option value="252">Diario hábil (252)</option>
-                    <option value="365">Diario calendario (365)</option>
-                </select>
-                <label for="portfolio-stress">Rendimientos por activo en escenarios de estrés (JSON opcional)</label>
-                <textarea id="portfolio-stress" name="escenarios_estres" rows="3" placeholder='{"Recesión": [-0.15, -0.30]}'></textarea>
-                <label for="portfolio-risk">Aversión al riesgo (positiva)</label>
-                <input id="portfolio-risk" name="aversion_riesgo" type="number" min="0.000001" step="any" value="1" required>
-                <button class="primary-button" type="submit">Guardar portafolio</button>
-                <button id="portfolio-cancel-edit" class="secondary-button" type="button" hidden>Cancelar edición</button>
+            <form id="portfolio-form" class="portfolio-form portfolio-editor-form" novalidate>
+                <fieldset class="portfolio-section">
+                    <legend><span class="number">01</span> Datos generales</legend>
+                    <div class="portfolio-general-grid">
+                        <div class="portfolio-field portfolio-field-wide">
+                            <label for="portfolio-name">Nombre</label>
+                            <input id="portfolio-name" name="nombre" maxlength="150" required placeholder="Ej.: Portafolio moderado">
+                        </div>
+                        <div class="portfolio-field">
+                            <label for="portfolio-risk">Aversión al riesgo</label>
+                            <input id="portfolio-risk" name="aversion_riesgo" type="number" min="0.000001" step="any" value="1" required aria-describedby="portfolio-risk-hint">
+                            <small id="portfolio-risk-hint" class="portfolio-hint">Más alta = prioriza menos riesgo.</small>
+                        </div>
+                        <div class="portfolio-field">
+                            <label for="portfolio-periods">Periodicidad de los datos</label>
+                            <select id="portfolio-periods" name="periodos_por_anio">
+                                <option value="1">Anual (1)</option>
+                                <option value="12">Mensual (12)</option>
+                                <option value="52">Semanal (52)</option>
+                                <option value="252">Diario hábil (252)</option>
+                                <option value="365">Diario calendario (365)</option>
+                            </select>
+                        </div>
+                    </div>
+                </fieldset>
+                <fieldset class="portfolio-section">
+                    <legend><span class="number">02</span> Activos</legend>
+                    <p class="portfolio-hint">Rendimiento esperado y límites de peso en porcentaje. Deja la categoría vacía si no la usas.</p>
+                    <div id="portfolio-assets-editor" class="portfolio-assets-editor"></div>
+                </fieldset>
+                <fieldset class="portfolio-section">
+                    <legend><span class="number">03</span> Riesgo: matriz de covarianza</legend>
+                    <p class="portfolio-hint">Varianzas en la diagonal y covarianzas fuera de ella, en el mismo periodo que los rendimientos. Al editar una celda se actualiza su simétrica.</p>
+                    <div id="portfolio-covariance-editor" class="portfolio-covariance-editor"></div>
+                </fieldset>
+                <details class="portfolio-advanced">
+                    <summary>Opciones avanzadas: límites por categoría y escenarios de estrés</summary>
+                    <label for="portfolio-category-limits">Límite máximo por categoría (JSON opcional)</label>
+                    <textarea id="portfolio-category-limits" name="limites_categoria" rows="2" placeholder='{"Acciones": 0.60}'></textarea>
+                    <label for="portfolio-stress">Rendimientos por activo en escenarios de estrés (JSON opcional)</label>
+                    <textarea id="portfolio-stress" name="escenarios_estres" rows="3" placeholder='{"Recesión": [-0.15, -0.30]}'></textarea>
+                </details>
+                <details class="portfolio-advanced portfolio-json">
+                    <summary>Editar los datos como texto (JSON)</summary>
+                    <p class="portfolio-hint">Estos campos y las tablas de arriba están sincronizados. Los valores van en fracciones (0.08 = 8 %).</p>
+                    <label for="portfolio-assets">Activos (separados por coma)</label>
+                    <input id="portfolio-assets" name="activos" placeholder="Bono, Acción">
+                    <label for="portfolio-categories">Categorías por activo (opcional, misma cantidad; coma separada)</label>
+                    <input id="portfolio-categories" name="categorias" placeholder="Renta fija, Acciones">
+                    <label for="portfolio-returns">Rendimientos esperados (JSON)</label>
+                    <textarea id="portfolio-returns" name="rendimientos" rows="2" placeholder="[0.04, 0.10]"></textarea>
+                    <label for="portfolio-covariance">Matriz de covarianza (JSON)</label>
+                    <textarea id="portfolio-covariance" name="covarianza" rows="3" placeholder="[[0.01, 0.002], [0.002, 0.04]]"></textarea>
+                    <label for="portfolio-minimums">Pesos mínimos por activo (JSON; predeterminado: todos 0)</label>
+                    <textarea id="portfolio-minimums" name="pesos_minimos" rows="2" placeholder="[0, 0]"></textarea>
+                    <label for="portfolio-maximums">Pesos máximos por activo (JSON; predeterminado: todos 1)</label>
+                    <textarea id="portfolio-maximums" name="pesos_maximos" rows="2" placeholder="[1, 1]"></textarea>
+                </details>
+                <div class="portfolio-form-actions">
+                    <button class="primary-button" type="submit">Guardar portafolio</button>
+                    <button id="portfolio-cancel-edit" class="secondary-button" type="button" hidden>Cancelar edición</button>
+                </div>
             </form>
             <p id="portfolio-message" class="message" role="status" hidden></p>
             <div id="portfolio-list" class="problems-list"></div>

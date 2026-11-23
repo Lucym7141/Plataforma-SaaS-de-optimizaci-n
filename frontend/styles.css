@@ -5172,3 +5172,320 @@ body:not(.authenticated) .notification-menu {
         box-shadow: none;
     }
 }
+
+/* Formulario de portafolio: secciones, tabla de activos y matriz de covarianza */
+.visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}
+
+.portfolio-editor-form {
+    gap: 16px;
+    max-width: 900px;
+}
+
+.portfolio-section {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    margin: 0;
+    padding: 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+
+.portfolio-section legend {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 6px;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.portfolio-section legend .number {
+    color: var(--primary);
+    font-size: 12px;
+}
+
+.portfolio-hint {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.portfolio-general-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
+    gap: 12px;
+}
+
+.portfolio-field {
+    display: grid;
+    align-content: start;
+    gap: 6px;
+}
+
+.portfolio-field label {
+    margin-top: 0;
+}
+
+.portfolio-editor-note {
+    margin: 0;
+    padding: 12px 14px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    font-size: 13px;
+}
+
+.portfolio-assets-editor {
+    display: grid;
+    justify-items: start;
+    gap: 12px;
+}
+
+.portfolio-assets-editor,
+.portfolio-covariance-editor {
+    min-width: 0;
+}
+
+.portfolio-assets-editor .table-scroll,
+.portfolio-covariance-editor .table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.portfolio-assets-table,
+.portfolio-covariance-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.portfolio-assets-table th,
+.portfolio-covariance-table th {
+    padding: 0 8px 8px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-align: left;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.portfolio-assets-table td {
+    padding: 4px;
+    vertical-align: middle;
+}
+
+.portfolio-assets-table tbody tr + tr td {
+    border-top: 1px solid var(--border);
+}
+
+.portfolio-editor-form .portfolio-assets-table input,
+.portfolio-editor-form .portfolio-covariance-table input {
+    min-width: 0;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.portfolio-assets-table td:first-child input {
+    min-width: 130px;
+    font-weight: 700;
+}
+
+.portfolio-percent-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 96px;
+}
+
+.portfolio-percent-input input {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.portfolio-percent-input > span {
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.portfolio-asset-remove {
+    width: 44px;
+    text-align: right;
+}
+
+.portfolio-covariance-table th[scope="row"] {
+    padding: 4px 10px 4px 0;
+    color: var(--text);
+    font-size: 13px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.portfolio-covariance-table thead th {
+    text-align: center;
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 12px;
+    color: var(--text);
+}
+
+.portfolio-covariance-table td {
+    padding: 3px;
+}
+
+.portfolio-covariance-table td input {
+    min-width: 84px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.portfolio-covariance-table td.is-diagonal input {
+    background: var(--primary-soft);
+    border-color: var(--primary-border);
+    font-weight: 700;
+}
+
+.portfolio-volatilities {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.portfolio-volatility-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+}
+
+.portfolio-advanced {
+    display: grid;
+    gap: 8px;
+    padding: 14px 16px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.portfolio-advanced > summary {
+    color: var(--primary-dark);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.portfolio-advanced[open] > summary {
+    margin-bottom: 6px;
+}
+
+.portfolio-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.portfolio-form-actions button {
+    width: auto;
+}
+
+@media (max-width: 720px) {
+    .portfolio-general-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .portfolio-field-wide {
+        grid-column: 1 / -1;
+    }
+
+    /* La matriz conserva un ancho legible y se desplaza dentro de su recuadro. */
+    .portfolio-covariance-table {
+        width: max-content;
+        min-width: 100%;
+    }
+
+    .portfolio-editor-form .portfolio-covariance-table td input {
+        width: 96px;
+    }
+
+    .portfolio-covariance-table th[scope="row"] {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: var(--surface);
+    }
+
+    /* En móvil cada activo se muestra como una tarjeta. */
+    .portfolio-assets-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+    }
+
+    .portfolio-assets-table,
+    .portfolio-assets-table tbody,
+    .portfolio-assets-table tr,
+    .portfolio-assets-table td {
+        display: block;
+        width: 100%;
+    }
+
+    .portfolio-assets-table tr {
+        position: relative;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 12px;
+        background: var(--surface-soft);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+    }
+
+    .portfolio-assets-table tbody tr + tr td {
+        border-top: 0;
+    }
+
+    .portfolio-assets-table td {
+        padding: 0;
+    }
+
+    .portfolio-assets-table td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 4px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .portfolio-assets-table td:first-child {
+        grid-column: 1 / -1;
+        padding-right: 44px;
+    }
+
+    .portfolio-asset-remove {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: auto;
+    }
+}

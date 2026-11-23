@@ -299,6 +299,8 @@ test("CSV import can be reviewed, optimized, and plotted", async ({ page }) => {
     // que esa carga sobrescriba los escenarios con {}.
     await expect(page.locator("#portfolio-form")
         .getByRole("button", { name: "Guardar cambios" })).toBeVisible();
+    await page.locator(".portfolio-advanced summary")
+        .filter({ hasText: "Opciones avanzadas" }).click();
     await page.locator("#portfolio-stress").fill(
         '{"Recesión": [-0.15, -0.30]}'
     );
@@ -457,11 +459,27 @@ test("dashboard shows active activity and does not refresh when archived lists c
     await openView(page, "#portfolio-panel", "analysis");
     const name = `Dashboard portfolio ${Date.now()}`;
     await page.locator("#portfolio-name").fill(name);
-    await page.locator("#portfolio-assets").fill("Bono, Acción");
-    await page.locator("#portfolio-returns").fill("[0.04, 0.10]");
-    await page.locator("#portfolio-covariance").fill(
-        "[[0.01, 0], [0, 0.04]]"
-    );
+    // Se usa el editor visual: tabla de activos en % y matriz de covarianza.
+    const assetsEditor = page.locator("#portfolio-assets-editor");
+    await assetsEditor.getByRole("button", { name: "Añadir activo" }).click();
+    await assetsEditor.getByRole("button", { name: "Añadir activo" }).click();
+    await assetsEditor.getByLabel("Rendimiento esperado de Activo 1 en porcentaje")
+        .fill("4");
+    await assetsEditor.getByLabel("Rendimiento esperado de Activo 2 en porcentaje")
+        .fill("10");
+    await assetsEditor.getByLabel("Nombre del activo 1", { exact: true }).fill("Bono");
+    await assetsEditor.getByLabel("Nombre del activo 2", { exact: true }).fill("Acción");
+    const covarianceEditor = page.locator("#portfolio-covariance-editor");
+    await covarianceEditor.locator('[data-cov-row="0"][data-cov-col="0"]').fill("0.01");
+    await covarianceEditor.locator('[data-cov-row="1"][data-cov-col="1"]').fill("0.04");
+    await covarianceEditor.locator('[data-cov-row="0"][data-cov-col="1"]').fill("0.002");
+    await expect(covarianceEditor.locator('[data-cov-row="1"][data-cov-col="0"]'))
+        .toHaveValue("0.002");
+    await expect(covarianceEditor.locator("[data-volatility='0']")).toHaveText("10 %");
+    await expect(page.locator("#portfolio-assets")).toHaveValue("Bono, Acción");
+    await expect(page.locator("#portfolio-returns")).toHaveValue("[0.04,0.1]");
+    await expect(page.locator("#portfolio-covariance"))
+        .toHaveValue("[[0.01,0.002],[0.002,0.04]]");
     await page.getByRole("button", { name: "Guardar portafolio" }).click();
     await expect(page.locator("#portfolio-list")).toContainText(name);
     await expect(page.locator("#dashboard-portfolios")).toContainText(name);
