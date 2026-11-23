@@ -2642,6 +2642,19 @@ window.addEventListener("hashchange", () => {
     syncAppView();
 });
 
+// El acceso «Asistente IA» lleva directo a la descripción del asistente.
+document.querySelectorAll("[data-focus-ai]").forEach((link) => {
+    link.addEventListener("click", () => {
+        requestAnimationFrame(() => {
+            const target = document.getElementById("problem-ai-assistant")
+                || document.getElementById("problem-author-root");
+            target?.scrollIntoView({ behavior: "smooth", block: "start" });
+            document.getElementById("problem-ai-description")
+                ?.focus({ preventScroll: true });
+        });
+    });
+});
+
 function syncAppView() {
     const targetId = window.location.hash.slice(1);
     const activeView = targetId === "portfolio-panel"

@@ -5025,3 +5025,150 @@ body:not(.authenticated) .notification-menu {
     flex-wrap: wrap;
     gap: 8px;
 }
+
+/* Funciones de IA: misma identidad visual en modelos, portafolios y explicaciones */
+.ai-badge {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px 3px 6px;
+    color: var(--primary-dark);
+    background: var(--primary-soft);
+    border: 1px solid var(--primary-border);
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    line-height: 1;
+}
+
+.ai-badge svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linejoin: round;
+}
+
+.ai-card-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 9px;
+}
+
+.ai-card-heading h3,
+.ai-card-heading h4 {
+    margin: 0;
+}
+
+.portfolio-ai.ai-card {
+    display: grid;
+    gap: 10px;
+    max-width: 760px;
+    margin: 14px 0;
+    padding: 16px;
+    background:
+        radial-gradient(circle at 100% 0, rgba(20, 184, 166, 0.1), transparent 50%),
+        var(--surface-soft);
+    border: 1px solid var(--primary-border);
+    border-radius: 14px;
+}
+
+.portfolio-ai.ai-card > .muted {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.portfolio-ai.ai-card .portfolio-form {
+    margin: 0;
+}
+
+.portfolio-ai.ai-card textarea {
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+.portfolio-ai.ai-card button[type="submit"] {
+    justify-self: start;
+    width: auto;
+}
+
+.problem-author-alternatives {
+    display: grid;
+    width: 100%;
+    gap: 10px;
+}
+
+.problem-author-alternatives-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+
+.problem-author-alternatives-row .muted {
+    font-size: 13px;
+}
+
+.problem-author-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+/* El chat queda fijo al pie mientras se revisa el formulario que modifica. */
+.react-problem-author > .model-chat.ai-card {
+    position: sticky;
+    bottom: 12px;
+    z-index: 5;
+    width: 100%;
+    margin-top: 4px;
+    padding: 14px 16px;
+    background: var(--surface);
+    border: 1px solid var(--primary-border);
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.16);
+}
+
+.react-problem-author > .model-chat.ai-card > .muted {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.react-problem-author > .model-chat.ai-card .model-chat-messages {
+    max-height: 150px;
+}
+
+.react-problem-author > .model-chat.ai-card .model-chat-form label {
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.react-problem-author > .model-chat.ai-card textarea {
+    width: 100%;
+    padding: 9px 11px;
+    color: var(--text);
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font: inherit;
+    resize: vertical;
+}
+
+@media (max-width: 640px), (max-height: 640px) {
+    .react-problem-author > .model-chat.ai-card {
+        position: static;
+        box-shadow: none;
+    }
+}

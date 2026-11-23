@@ -211,6 +211,17 @@ function formatApiError(data) {
     return messages.join(" ") || "No se pudo guardar el modelo.";
 }
 
+function AiBadge() {
+    return (
+        <span className="ai-badge" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z" />
+            </svg>
+            IA
+        </span>
+    );
+}
+
 function ProblemAuthor() {
     const [open, setOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
@@ -474,6 +485,7 @@ function ProblemAuthor() {
         resetForm();
         setMessage("");
         setIsError(false);
+        setAssistantMessage("");
     };
 
     // Modelo del editor con el formato de la API (se usa al guardar y al
@@ -596,6 +608,7 @@ function ProblemAuthor() {
             ));
             resetForm();
             setOpen(false);
+            setAssistantMessage("");
             setMessage(editingId
                 ? `Modelo "${data.nombre}" actualizado.`
                 : `Modelo "${data.nombre}" creado y abierto.`);
@@ -608,10 +621,30 @@ function ProblemAuthor() {
         }
     };
 
+    const assistantNotice = assistantMessage && (
+        <p
+            className={assistantError
+                ? "message error-message"
+                : "message success-message"}
+            role={assistantError ? "alert" : "status"}
+        >
+            {assistantMessage}
+        </p>
+    );
+
     return (
         <section className="react-problem-author">
-            <section className="problem-ai-assistant">
-                <h3>Asistente de modelos con IA</h3>
+            {!open && (
+            <>
+            <section
+                id="problem-ai-assistant"
+                className="problem-ai-assistant ai-card"
+                aria-labelledby="problem-ai-title"
+            >
+                <div className="ai-card-heading">
+                    <AiBadge />
+                    <h3 id="problem-ai-title">Crea tu modelo con IA</h3>
+                </div>
                 <p className="muted">
                     Describe el objetivo, las decisiones y las restricciones para recibir
                     un borrador editable. La IA puede equivocarse: revisa los datos antes
@@ -648,120 +681,65 @@ function ProblemAuthor() {
                             ? "Generando borrador..."
                             : "Generar borrador con IA"}
                     </button>
-                    {assistantMessage && (
-                        <p
-                            className={assistantError
-                                ? "message error-message"
-                                : "message success-message"}
-                            role={assistantError ? "alert" : "status"}
-                        >
-                            {assistantMessage}
-                        </p>
-                    )}
+                    {assistantNotice}
                 </form>
-                {open && !loadingExisting && (
-                    <section className="model-chat" aria-labelledby="model-chat-title">
-                        <h4 id="model-chat-title">Ajustar el borrador conversando</h4>
-                        <p className="muted">
-                            Pide cambios como «agrega una restricción de 40 horas» o «cambia x
-                            a entera». El asistente modifica el editor y puedes deshacer el
-                            último cambio. Cada mensaje usa una consulta de IA de tu plan; la
-                            conversación no se guarda.
-                        </p>
-                        {chatMessages.length > 0 && (
-                            <ol className="model-chat-messages" aria-live="polite">
-                                {chatMessages.map((chatMessage, index) => (
-                                    <li
-                                        key={index}
-                                        className={`model-chat-message model-chat-${chatMessage.rol}`}
-                                    >
-                                        <span className="model-chat-author">
-                                            {chatMessage.rol === "usuario" ? "Tú" : "Asistente"}
-                                        </span>
-                                        <p>{chatMessage.texto}</p>
-                                    </li>
-                                ))}
-                            </ol>
-                        )}
-                        <form className="model-chat-form" onSubmit={sendChatMessage}>
-                            <label htmlFor="model-chat-input">Mensaje para el asistente</label>
-                            <textarea
-                                id="model-chat-input"
-                                value={chatInput}
-                                onChange={(event) => setChatInput(event.target.value)}
-                                maxLength={2000}
-                                rows={2}
-                                placeholder="Ejemplo: agrega una restricción de 40 horas en la que x usa 2 horas por unidad."
-                            />
-                            <div className="model-chat-actions">
-                                <button
-                                    className="primary-button"
-                                    type="submit"
-                                    disabled={chatBusy || chatInput.trim().length < 2}
-                                    aria-busy={chatBusy}
-                                >
-                                    {chatBusy ? "Pensando..." : "Enviar"}
-                                </button>
-                                {undoSnapshot && (
-                                    <button
-                                        className="secondary-button"
-                                        type="button"
-                                        onClick={undoChatChange}
-                                    >
-                                        Deshacer último cambio
-                                    </button>
-                                )}
-                            </div>
-                            {chatError && (
-                                <p className="message error-message" role="alert">
-                                    {chatError}
-                                </p>
-                            )}
-                        </form>
-                    </section>
-                )}
             </section>
-            <details className="problem-template-library">
-                <summary>Biblioteca de plantillas</summary>
-                <p className="muted">
-                    Carga un modelo de ejemplo en el constructor; podrás ajustarlo antes de guardarlo.
-                    Los valores son ilustrativos y debes adaptarlos a tu caso.
-                </p>
-                <div className="problem-template-grid">
-                    {optimizationTemplates.map((template) => (
-                        <article className="problem-template-card" key={template.id}>
-                            <span className="problem-template-category">{template.category}</span>
-                            <h3>{template.title}</h3>
-                            <p>{template.description}</p>
-                            <button
-                                className="secondary-button"
-                                type="button"
-                                onClick={() => applyTemplate(template)}
-                            >
-                                Usar plantilla
-                            </button>
-                        </article>
-                    ))}
+            <section className="problem-author-alternatives" aria-label="Otras formas de crear un modelo">
+                <div className="problem-author-alternatives-row">
+                    <span className="muted">¿Prefieres armarlo tú?</span>
+                    <button
+                        className="secondary-button"
+                        type="button"
+                        aria-expanded={open}
+                        aria-controls="problem-author-form"
+                        onClick={() => {
+                            setOpen(true);
+                            setEditingId(null);
+                            resetForm();
+                            setMessage("");
+                            setAssistantMessage("");
+                        }}
+                    >
+                        ＋ Crear desde cero
+                    </button>
                 </div>
-            </details>
-            <button
-                className="primary-button"
-                type="button"
-                aria-expanded={open}
-                aria-controls="problem-author-form"
-                onClick={() => {
-                    if (open) {
-                        cancelEditing();
-                    } else {
-                        setOpen(true);
-                        setEditingId(null);
-                        resetForm();
-                        setMessage("");
-                    }
-                }}
-            >
-                {open ? "Cancelar" : "＋ Crear problema"}
-            </button>
+                <details className="problem-template-library">
+                    <summary>Usar una plantilla</summary>
+                    <p className="muted">
+                        Carga un modelo de ejemplo en el constructor; podrás ajustarlo antes de guardarlo.
+                        Los valores son ilustrativos y debes adaptarlos a tu caso.
+                    </p>
+                    <div className="problem-template-grid">
+                        {optimizationTemplates.map((template) => (
+                            <article className="problem-template-card" key={template.id}>
+                                <span className="problem-template-category">{template.category}</span>
+                                <h3>{template.title}</h3>
+                                <p>{template.description}</p>
+                                <button
+                                    className="secondary-button"
+                                    type="button"
+                                    onClick={() => applyTemplate(template)}
+                                >
+                                    Usar plantilla
+                                </button>
+                            </article>
+                        ))}
+                    </div>
+                </details>
+            </section>
+            </>
+            )}
+            {open && (
+                <div className="problem-author-bar">
+                    <strong>
+                        {editingId ? "Editando el modelo" : "Borrador del modelo"}
+                    </strong>
+                    <button className="secondary-button" type="button" onClick={cancelEditing}>
+                        Cancelar
+                    </button>
+                </div>
+            )}
+            {open && assistantNotice}
             {message && (
                 <p className={isError ? "message error-message" : "message success-message"}
                     role={isError ? "alert" : "status"}>
@@ -772,6 +750,7 @@ function ProblemAuthor() {
                 loadingExisting ? (
                     <p className="muted" role="status">Cargando modelo para editar...</p>
                 ) : (
+                <>
                 <form
                     id="problem-author-form"
                     className="problem-author-form"
@@ -1015,6 +994,70 @@ function ProblemAuthor() {
                         </button>
                     </div>
                 </form>
+                    <section className="model-chat ai-card" aria-labelledby="model-chat-title">
+                        <div className="ai-card-heading">
+                            <AiBadge />
+                            <h4 id="model-chat-title">Ajusta el borrador conversando</h4>
+                        </div>
+                        {chatMessages.length === 0 && (
+                            <p className="muted">
+                                El asistente modifica el formulario y puedes deshacer el último
+                                cambio. Cada mensaje usa una consulta de IA de tu plan; la
+                                conversación no se guarda.
+                            </p>
+                        )}
+                        {chatMessages.length > 0 && (
+                            <ol className="model-chat-messages" aria-live="polite">
+                                {chatMessages.map((chatMessage, index) => (
+                                    <li
+                                        key={index}
+                                        className={`model-chat-message model-chat-${chatMessage.rol}`}
+                                    >
+                                        <span className="model-chat-author">
+                                            {chatMessage.rol === "usuario" ? "Tú" : "Asistente"}
+                                        </span>
+                                        <p>{chatMessage.texto}</p>
+                                    </li>
+                                ))}
+                            </ol>
+                        )}
+                        <form className="model-chat-form" onSubmit={sendChatMessage}>
+                            <label htmlFor="model-chat-input">Mensaje para el asistente</label>
+                            <textarea
+                                id="model-chat-input"
+                                value={chatInput}
+                                onChange={(event) => setChatInput(event.target.value)}
+                                maxLength={2000}
+                                rows={2}
+                                placeholder="Ejemplo: agrega una restricción de 40 horas en la que x usa 2 horas por unidad."
+                            />
+                            <div className="model-chat-actions">
+                                <button
+                                    className="primary-button"
+                                    type="submit"
+                                    disabled={chatBusy || chatInput.trim().length < 2}
+                                    aria-busy={chatBusy}
+                                >
+                                    {chatBusy ? "Pensando..." : "Enviar"}
+                                </button>
+                                {undoSnapshot && (
+                                    <button
+                                        className="secondary-button"
+                                        type="button"
+                                        onClick={undoChatChange}
+                                    >
+                                        Deshacer último cambio
+                                    </button>
+                                )}
+                            </div>
+                            {chatError && (
+                                <p className="message error-message" role="alert">
+                                    {chatError}
+                                </p>
+                            )}
+                        </form>
+                    </section>
+                </>
                 )
             )}
         </section>

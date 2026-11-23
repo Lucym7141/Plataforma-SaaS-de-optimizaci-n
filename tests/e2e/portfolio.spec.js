@@ -941,7 +941,7 @@ test("user can create a complete optimization model from the React workspace", a
     await signIn(page);
     await openView(page, "#problem-workspace", "models");
     const root = page.locator("#problem-author-root");
-    await root.getByRole("button", { name: "Crear problema" }).click();
+    await root.getByRole("button", { name: "Crear desde cero" }).click();
 
     const form = page.locator("#problem-author-form");
     const name = `Modelo React ${Date.now()}`;
@@ -1053,7 +1053,18 @@ test("user can load and create a model from the template library", async ({ page
     await openView(page, "#problem-workspace", "models");
     const root = page.locator("#problem-author-root");
     const library = root.locator(".problem-template-library");
-    await library.locator("summary").click();
+    // Con un borrador abierto la biblioteca se oculta: se cancela y se vuelve a abrir.
+    const useTemplate = async (title) => {
+        const cancel = root.locator(".problem-author-bar")
+            .getByRole("button", { name: "Cancelar" });
+        if (await cancel.isVisible()) await cancel.click();
+        if (!(await library.evaluate((details) => details.open))) {
+            await library.locator("summary").click();
+        }
+        await library.locator(".problem-template-card")
+            .filter({ hasText: title })
+            .getByRole("button", { name: "Usar plantilla" }).click();
+    };
 
     const expectedTemplates = [
         ["Asignación de inversión", 2, "MAX"],
@@ -1064,18 +1075,14 @@ test("user can load and create a model from the template library", async ({ page
     ];
     const form = page.locator("#problem-author-form");
     for (const [title, variableCount, objective] of expectedTemplates) {
-        const card = library.locator(".problem-template-card")
-            .filter({ hasText: title });
-        await card.getByRole("button", { name: "Usar plantilla" }).click();
+        await useTemplate(title);
         await expect(form).toBeVisible();
         await expect(form.locator(".problem-author-variable"))
             .toHaveCount(variableCount);
         await expect(form.locator("select").first()).toHaveValue(objective);
     }
 
-    await library.locator(".problem-template-card")
-        .filter({ hasText: "Portafolio regulado (Ejercicio 5)" })
-        .getByRole("button", { name: "Usar plantilla" }).click();
+    await useTemplate("Portafolio regulado (Ejercicio 5)");
     const portfolioName = `Ejercicio 5 ${Date.now()}`;
     await form.getByLabel("Nombre del modelo").fill(portfolioName);
     await expect(form.locator(".problem-author-constraint")).toHaveCount(5);
@@ -1133,9 +1140,7 @@ test("user can load and create a model from the template library", async ({ page
     const portfolioDelete = await portfolioDeletePromise;
     expect(portfolioDelete.status()).toBe(204);
 
-    await library.locator(".problem-template-card")
-        .filter({ hasText: "Transporte y distribución" })
-        .getByRole("button", { name: "Usar plantilla" }).click();
+    await useTemplate("Transporte y distribución");
     const name = `Plantilla transporte ${Date.now()}`;
     await form.getByLabel("Nombre del modelo").fill(name);
     await expect(form.locator(".problem-author-constraint")).toHaveCount(4);
@@ -1233,7 +1238,8 @@ test("user can generate a model draft with AI and confirm before saving", async 
         .toHaveValue("Borrador generado; revisa los coeficientes.");
     await expect(form.locator(".problem-author-variable")).toHaveCount(2);
     await expect(form.locator(".problem-author-constraint")).toHaveCount(1);
-    await expect(assistant).toContainText("Revisa y corrige cada valor");
+    await expect(page.locator("#problem-author-root"))
+        .toContainText("Revisa y corrige cada valor");
     const afterDraft = await page.evaluate(async () => {
         const response = await fetch("/api/problemas/");
         return response.json();
@@ -1424,8 +1430,7 @@ test("portfolio drafts from a description fill the form and report missing data"
         });
     });
 
-    const assistant = page.locator("details.portfolio-ai");
-    await assistant.locator("summary").click();
+    const assistant = page.locator("#portfolio-ai");
     await page.locator("#portfolio-ai-description").fill(
         "Bonos rinden 6 % con volatilidad 5 %; Acciones con volatilidad 20 %."
     );

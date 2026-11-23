@@ -420,7 +420,7 @@
                     <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                     Crear modelo
                 </a>
-                <a class="dashboard-shortcut" href="#problem-workspace">
+                <a class="dashboard-shortcut" href="#problem-workspace" data-focus-ai="problem">
                     <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/><path d="m19 16 .8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8L19 16Z"/></svg>
                     Asistente IA
                 </a>
@@ -522,54 +522,6 @@
             <h1 id="models-page-title">Tus modelos y asistente IA</h1>
             <p class="muted">Crea modelos desde cero o genera un borrador con el asistente; revísalo antes de guardarlo.</p>
         </section>
-        <section class="dashboard-section dashboard-recent-section" data-app-page="models" aria-labelledby="dashboard-recent-title">
-            <div class="dashboard-section-heading">
-                <div>
-                    <p class="section-label">RETOMA TU TRABAJO</p>
-                    <h2 id="dashboard-recent-title">Actividad reciente</h2>
-                </div>
-                <span class="muted">Elementos activos actualizados recientemente</span>
-            </div>
-            <div class="activity-grid">
-                <article class="chart-card activity-card">
-                    <div class="card-heading">
-                        <h3>Modelos de optimización</h3>
-                        <a class="dashboard-view-all" href="#problem-workspace">Ver modelos</a>
-                    </div>
-                    <div id="dashboard-problems" class="activity-list" aria-live="polite"></div>
-                </article>
-                <article class="chart-card activity-card">
-                    <div class="card-heading">
-                        <h3>Portafolios</h3>
-                        <a class="dashboard-view-all" href="#portfolio-panel">Ver portafolios</a>
-                    </div>
-                    <div id="dashboard-portfolios" class="activity-list" aria-live="polite"></div>
-                </article>
-            </div>
-        </section>
-        <section class="dashboard-section dashboard-history-section" data-app-page="models" aria-labelledby="dashboard-history-title">
-            <div class="dashboard-section-heading">
-                <div>
-                    <p class="section-label">SEGUIMIENTO</p>
-                    <h2 id="dashboard-history-title">Historial reciente</h2>
-                </div>
-                <span class="muted">Ordenado por última modificación</span>
-            </div>
-            <div class="chart-card dashboard-history-card">
-                <div class="table-scroll">
-                    <table class="dashboard-history-table">
-                        <thead>
-                            <tr>
-                                <th scope="col">Tipo</th>
-                                <th scope="col">Modelo o portafolio</th>
-                                <th scope="col">Última modificación</th>
-                            </tr>
-                        </thead>
-                        <tbody id="dashboard-activity-history" aria-live="polite"></tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
         <section class="app-page-heading" data-app-page="analysis" aria-labelledby="analysis-page-title">
             <p class="section-label">ANÁLISIS MEDIA-VARIANZA</p>
             <h1 id="analysis-page-title">Análisis de portafolio</h1>
@@ -587,6 +539,21 @@
                 </div>
             </div>
             <p class="muted">Ingresa rendimientos esperados como fracciones (por ejemplo, 0.08 = 8 %) y una matriz de covarianza en el mismo periodo.</p>
+            <section id="portfolio-ai" class="portfolio-ai ai-card" aria-labelledby="portfolio-ai-title">
+                <div class="ai-card-heading">
+                    <span class="ai-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></svg>IA</span>
+                    <h3 id="portfolio-ai-title">Crea tu portafolio con IA</h3>
+                </div>
+                <p class="muted">Describe cada activo con su rendimiento esperado y su riesgo (volatilidad y correlaciones, o la covarianza). La IA solo ordena los datos que escribas: no los completa con datos de mercado ni recomienda activos. Usa una consulta de IA de tu plan.</p>
+                <p class="muted">Al generar, el texto se envía a Azure OpenAI. Nada se guarda hasta que revises el formulario y pulses «Guardar portafolio».</p>
+                <form id="portfolio-ai-form" class="portfolio-form">
+                    <label for="portfolio-ai-description">Descripción del portafolio</label>
+                    <textarea id="portfolio-ai-description" name="texto" rows="5" minlength="20" maxlength="6000" required placeholder="Ejemplo: Bonos con rendimiento esperado de 6 % anual y volatilidad de 5 %; Acciones con 10 % y volatilidad de 20 %; correlación entre ambos de 0,3. Máximo 70 % en acciones."></textarea>
+                    <button class="primary-button" type="submit">Generar borrador con IA</button>
+                </form>
+                <p id="portfolio-ai-message" class="message" role="status" hidden></p>
+                <ul id="portfolio-ai-notes" class="portfolio-ai-notes" hidden></ul>
+            </section>
             <details class="csv-import">
                 <summary>Importar desde CSV y previsualizar</summary>
                 <p class="muted">Usa columnas <code>asset, expected_return</code> y una <code>cov:&lt;activo&gt;</code> por activo. Son opcionales <code>category, min_weight, max_weight</code>. El orden de columnas de covarianza debe coincidir con el orden de las filas.</p>
@@ -599,18 +566,6 @@
                 </form>
                 <p id="portfolio-import-message" class="message" role="status" hidden></p>
                 <div id="portfolio-import-preview" class="solution-values" hidden></div>
-            </details>
-            <details class="portfolio-ai">
-                <summary>Crear portafolio con IA a partir de una descripción</summary>
-                <p class="muted">Describe cada activo con su rendimiento esperado y su riesgo (volatilidad y correlaciones, o la covarianza). La IA solo ordena los datos que escribas: no los completa con datos de mercado ni recomienda activos. Usa una consulta de IA de tu plan.</p>
-                <p class="muted">Al generar, el texto se envía a Azure OpenAI. Nada se guarda hasta que revises el formulario y pulses «Guardar portafolio».</p>
-                <form id="portfolio-ai-form" class="portfolio-form">
-                    <label for="portfolio-ai-description">Descripción del portafolio</label>
-                    <textarea id="portfolio-ai-description" name="texto" rows="5" minlength="20" maxlength="6000" required placeholder="Ejemplo: Bonos con rendimiento esperado de 6 % anual y volatilidad de 5 %; Acciones con 10 % y volatilidad de 20 %; correlación entre ambos de 0,3. Máximo 70 % en acciones."></textarea>
-                    <button class="secondary-button" type="submit">Generar borrador con IA</button>
-                </form>
-                <p id="portfolio-ai-message" class="message" role="status" hidden></p>
-                <ul id="portfolio-ai-notes" class="portfolio-ai-notes" hidden></ul>
             </details>
             <form id="portfolio-form" class="portfolio-form">
                 <label for="portfolio-name">Nombre</label>
@@ -656,7 +611,7 @@
                 <div id="portfolio-result-values" class="solution-values"></div>
                 <section class="ai-explanation" data-explanation-section="portfolio">
                     <div class="ai-explanation-heading">
-                        <h3>Explicación con IA</h3>
+                        <h3 class="ai-card-heading"><span class="ai-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></svg>IA</span> Explicación con IA</h3>
                         <button class="secondary-button" type="button" data-explain-target="portfolio">Explicar con IA</button>
                     </div>
                     <p class="muted ai-explanation-intro">Resume cómo se reparten el peso y el riesgo según tus supuestos. No es asesoría financiera. Usa una consulta de IA de tu plan; una vez generada queda guardada.</p>
@@ -781,7 +736,7 @@
                         <p class="message" data-report-message="problem" role="status" hidden></p>
                         <section class="ai-explanation" data-explanation-section="problem">
                             <div class="ai-explanation-heading">
-                                <h3>Explicación con IA</h3>
+                                <h3 class="ai-card-heading"><span class="ai-badge" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></svg>IA</span> Explicación con IA</h3>
                                 <button class="secondary-button" type="button" data-explain-target="problem">Explicar con IA</button>
                             </div>
                             <p class="muted ai-explanation-intro">Resume en lenguaje sencillo qué restricciones limitan el resultado y qué revisar. Usa una consulta de IA de tu plan; una vez generada queda guardada.</p>
@@ -795,6 +750,54 @@
                     </section>
                 </div>
             </section>
+        </section>
+        <section class="dashboard-section dashboard-recent-section" data-app-page="models" aria-labelledby="dashboard-recent-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="section-label">RETOMA TU TRABAJO</p>
+                    <h2 id="dashboard-recent-title">Actividad reciente</h2>
+                </div>
+                <span class="muted">Elementos activos actualizados recientemente</span>
+            </div>
+            <div class="activity-grid">
+                <article class="chart-card activity-card">
+                    <div class="card-heading">
+                        <h3>Modelos de optimización</h3>
+                        <a class="dashboard-view-all" href="#problem-workspace">Ver modelos</a>
+                    </div>
+                    <div id="dashboard-problems" class="activity-list" aria-live="polite"></div>
+                </article>
+                <article class="chart-card activity-card">
+                    <div class="card-heading">
+                        <h3>Portafolios</h3>
+                        <a class="dashboard-view-all" href="#portfolio-panel">Ver portafolios</a>
+                    </div>
+                    <div id="dashboard-portfolios" class="activity-list" aria-live="polite"></div>
+                </article>
+            </div>
+        </section>
+        <section class="dashboard-section dashboard-history-section" data-app-page="models" aria-labelledby="dashboard-history-title">
+            <div class="dashboard-section-heading">
+                <div>
+                    <p class="section-label">SEGUIMIENTO</p>
+                    <h2 id="dashboard-history-title">Historial reciente</h2>
+                </div>
+                <span class="muted">Ordenado por última modificación</span>
+            </div>
+            <div class="chart-card dashboard-history-card">
+                <div class="table-scroll">
+                    <table class="dashboard-history-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Tipo</th>
+                                <th scope="col">Modelo o portafolio</th>
+                                <th scope="col">Última modificación</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dashboard-activity-history" aria-live="polite"></tbody>
+                    </table>
+                </div>
+            </div>
         </section>
 
         <footer class="app-footer" data-app-page="dashboard">
