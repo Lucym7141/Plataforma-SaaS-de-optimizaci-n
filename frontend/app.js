@@ -718,11 +718,15 @@ function getVariableName(term, variables = []) {
 }
 
 function formatExpression(terms, variables = []) {
-    if (!terms || terms.length === 0) {
+    const visible = (terms || []).filter((term) => {
+        const coefficient = Number(term.coeficiente);
+        return !Number.isFinite(coefficient) || coefficient !== 0;
+    });
+    if (visible.length === 0) {
         return "0";
     }
 
-    return terms.map((term, index) => {
+    return visible.map((term, index) => {
         const coefficient = Number(term.coeficiente);
         const variableName = getVariableName(term, variables);
 
@@ -732,9 +736,9 @@ function formatExpression(terms, variables = []) {
 
         const sign = coefficient < 0 ? "−" : "+";
         const absoluteValue = Math.abs(coefficient);
-        const coefficientText = formatNumber(absoluteValue);
-
-        let part = `${coefficientText} · ${variableName}`;
+        const part = absoluteValue === 1
+            ? variableName
+            : `${formatNumber(absoluteValue)} · ${variableName}`;
 
         if (index === 0) {
             return coefficient < 0 ? `−${part}` : part;
@@ -1172,24 +1176,111 @@ async function submitAuthRequest(event, endpoint, successMessage) {
     }
 }
 
-function showHistory(items, target, portfolio = false) {
-    target.innerHTML = items.length
-        ? items.map((item) => {
-            const date = item.creada_en || item.iniciada_en;
-            if (portfolio) {
-                return `<div class="solution-card">
-                    <span>${escapeHTML(new Date(date).toLocaleString())}</span>
-                    <strong>Rendimiento ${formatNumber(item.rendimientos_portafolio)} · Volatilidad ${formatNumber(item.volatilidad_portafolio)}</strong>
-                </div>
-                <div class="muted">${escapeHTML(JSON.stringify(item.ponderaciones))}</div>`;
-            }
-            return `<div class="solution-card">
-                <span>${escapeHTML(new Date(date).toLocaleString())} · ${escapeHTML(getStatusLabel(item.estado))}</span>
-                <strong>${escapeHTML(formatNumber(item.valor_objetivo))}</strong>
-            </div>`;
-        }).join("")
-        : '<p class="muted">Todavía no hay ejecuciones.</p>';
+const HISTORY_VISIBLE_ROWS = 6;
+
+function formatPercent(fraction, digits = 2) {
+    const number = Number(fraction);
+    if (fraction === null || fraction === undefined || !Number.isFinite(number)) {
+        return "—";
+    }
+    return `${new Intl.NumberFormat("es-CO", {
+        maximumFractionDigits: digits
+    }).format(number * 100)} %`;
 }
+
+function formatMetric(value, digits = 4) {
+    const number = Number(value);
+    if (value === null || value === undefined || !Number.isFinite(number)) return "—";
+    return new Intl.NumberFormat("es-CO", { maximumFractionDigits: digits }).format(number);
+}
+
+function portfolioAllocationChips(item, limit = 3) {
+    const names = item.modelo_snapshot?.activos || [];
+    const weights = (item.ponderaciones || [])
+        .map((weight, index) => ({
+            name: names[index] || `Activo ${index + 1}`,
+            weight: Number(weight)
+        }))
+        .filter((entry) => entry.weight >= 0.005)
+        .sort((first, second) => second.weight - first.weight);
+    if (!weights.length) return '<span class="muted">Sin asignación</span>';
+    const chips = weights.slice(0, limit).map((entry) =>
+        `<span class="history-chip">${escapeHTML(entry.name)} <strong>${formatPercent(entry.weight, 1)}</strong></span>`);
+    if (weights.length > limit) {
+        chips.push(`<span class="history-chip history-chip-more">+${weights.length - limit}</span>`);
+    }
+    return chips.join("");
+}
+
+function problemSolutionChips(item, limit = 4) {
+    const values = item.valores || [];
+    if (!values.length) return '<span class="muted">Sin valores</span>';
+    const chips = values.slice(0, limit).map((value) =>
+        `<span class="history-chip">${escapeHTML(value.variable_nombre || `Variable ${value.variable}`)} <strong>${escapeHTML(formatMetric(value.valor))}</strong></span>`);
+    if (values.length > limit) {
+        chips.push(`<span class="history-chip history-chip-more">+${values.length - limit}</span>`);
+    }
+    return chips.join("");
+}
+
+function showHistory(items, target, portfolio = false) {
+    if (!items.length) {
+        target.innerHTML = '<p class="history-empty">Todavía no hay ejecuciones.</p>';
+        return;
+    }
+    const header = portfolio
+        ? `<th scope="col">Fecha</th>
+           <th scope="col" class="numeric">Rendimiento anual</th>
+           <th scope="col" class="numeric">Volatilidad anual</th>
+           <th scope="col">Distribución principal</th>`
+        : `<th scope="col">Fecha</th>
+           <th scope="col">Estado</th>
+           <th scope="col" class="numeric">Valor objetivo</th>
+           <th scope="col">Solución</th>`;
+    const rows = items.map((item, index) => {
+        const date = formatDashboardDate(item.creada_en || item.iniciada_en);
+        const hidden = index >= HISTORY_VISIBLE_ROWS ? " hidden data-history-extra" : "";
+        if (portfolio) {
+            const annualReturn = item.rendimiento_anualizado ?? item.rendimientos_portafolio;
+            const annualRisk = item.volatilidad_anualizada ?? item.volatilidad_portafolio;
+            return `<tr${hidden}>
+                <td data-label="Fecha">${escapeHTML(date)}</td>
+                <td data-label="Rendimiento anual" class="numeric">${formatPercent(annualReturn)}</td>
+                <td data-label="Volatilidad anual" class="numeric">${formatPercent(annualRisk)}</td>
+                <td data-label="Distribución"><div class="history-chips">${portfolioAllocationChips(item)}</div></td>
+            </tr>`;
+        }
+        const ok = item.estado === "OPT";
+        return `<tr${hidden}>
+            <td data-label="Fecha">${escapeHTML(date)}</td>
+            <td data-label="Estado"><span class="history-status ${ok ? "is-ok" : "is-bad"}">${escapeHTML(getStatusLabel(item.estado))}</span></td>
+            <td data-label="Valor objetivo" class="numeric">${escapeHTML(formatMetric(item.valor_objetivo))}</td>
+            <td data-label="Solución"><div class="history-chips">${problemSolutionChips(item)}</div></td>
+        </tr>`;
+    }).join("");
+    const extra = items.length - HISTORY_VISIBLE_ROWS;
+    target.innerHTML = `
+        <div class="table-scroll">
+            <table class="history-table">
+                <thead><tr>${header}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+        ${extra > 0 ? `<button class="secondary-button history-toggle" type="button" data-history-toggle aria-expanded="false">Ver todo el historial (${items.length})</button>` : ""}`;
+}
+
+document.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-history-toggle]");
+    if (!toggle) return;
+    const container = toggle.parentElement;
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    container.querySelectorAll("[data-history-extra]").forEach((row) => {
+        row.hidden = expanded;
+    });
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    const total = container.querySelectorAll("tbody tr").length;
+    toggle.textContent = expanded ? `Ver todo el historial (${total})` : "Ver menos";
+});
 
 function portfolioPayload() {
     const form = document.getElementById("portfolio-form");
@@ -2214,24 +2305,114 @@ async function renderPortfolioResult(result, id) {
     selectedPortfolioId = id;
     lastPortfolioExecutionId = result.id;
     resetExplanation("portfolio", result);
+    const snapshot = result.modelo_snapshot || {};
+    const names = snapshot.activos || [];
+    const categories = snapshot.categorias || [];
+    const periods = Number(snapshot.periodos_por_anio) || 1;
+    const contributions = result.contribuciones_riesgo || [];
+    const allocation = (result.ponderaciones || []).map((weight, index) => ({
+        name: names[index] || `Activo ${index + 1}`,
+        category: categories[index] || "",
+        weight: Number(weight) || 0,
+        riskShare: Number(contributions[index]?.proporcion_volatilidad) || 0,
+        riskContribution: contributions[index]?.contribucion_volatilidad,
+        maxWeight: Number(snapshot.pesos_maximos?.[index] ?? 1)
+    })).sort((first, second) =>
+        second.weight - first.weight || second.riskShare - first.riskShare);
+    const invested = allocation.filter((entry) => entry.weight >= 0.005);
+    const top = allocation[0];
+    const annualReturn = result.rendimiento_anualizado ?? result.rendimientos_portafolio;
+    const annualRisk = result.volatilidad_anualizada ?? result.volatilidad_portafolio;
+    const periodNote = periods > 1
+        ? `Por periodo: ${formatPercent(result.rendimientos_portafolio)}`
+        : "Según tus supuestos";
+    const periodRiskNote = periods > 1
+        ? `Por periodo: ${formatPercent(result.volatilidad_portafolio)}`
+        : "Desviación estándar de la cartera";
+
+    let insight = "";
+    if (top && top.weight >= 0.995) {
+        insight = `Toda la cartera queda en <strong>${escapeHTML(top.name)}</strong>: con estos supuestos no hay diversificación. Revisa los límites de peso o sube la aversión al riesgo si quieres repartirla.`;
+    } else if (top && top.weight >= 0.6) {
+        const atLimit = top.maxWeight < 1 && Math.abs(top.weight - top.maxWeight) < 0.005;
+        insight = atLimit
+            ? `<strong>${escapeHTML(top.name)}</strong> concentra el ${formatPercent(top.weight, 1)} del peso y llegó a su peso máximo: el optimizador le asignaría más si el límite lo permitiera.`
+            : `<strong>${escapeHTML(top.name)}</strong> concentra el ${formatPercent(top.weight, 1)} del peso. Puedes limitarlo con un peso máximo.`;
+    } else if (invested.length > 1) {
+        insight = `La cartera se reparte entre ${invested.length} activos; el mayor peso es <strong>${escapeHTML(top.name)}</strong> con ${formatPercent(top.weight, 1)}.`;
+    }
+
+    const bar = (fraction, tone) => {
+        const width = Math.max(0, Math.min(100, fraction * 100)).toFixed(2);
+        return `<span class="allocation-bar ${tone}" aria-hidden="true"><span style="width:${width}%"></span></span>`;
+    };
+    const rows = allocation.map((entry) => `
+        <tr class="${entry.weight < 0.005 ? "is-empty" : ""}">
+            <th scope="row">
+                <span class="allocation-name">${escapeHTML(entry.name)}</span>
+                ${entry.category ? `<span class="allocation-category">${escapeHTML(entry.category)}</span>` : ""}
+            </th>
+            <td>
+                <div class="allocation-cell">${bar(entry.weight, "is-weight")}<strong>${formatPercent(entry.weight, 1)}</strong></div>
+            </td>
+            <td>
+                <div class="allocation-cell" title="Aporta ${formatPercent(entry.riskContribution)} de volatilidad">${bar(entry.riskShare, "is-risk")}<strong>${formatPercent(entry.riskShare, 1)}</strong></div>
+            </td>
+        </tr>`).join("");
+
+    const stress = Object.entries(result.resultados_estres || {});
+    const stressHtml = stress.length ? `
+        <section class="portfolio-result-block">
+            <h4>Escenarios de estrés</h4>
+            <ul class="stress-list">
+                ${stress.map(([scenario, value]) => `
+                    <li>
+                        <span>${escapeHTML(scenario)}</span>
+                        <strong class="${Number(value) < 0 ? "is-negative" : "is-positive"}">${formatPercent(value)}</strong>
+                    </li>`).join("")}
+            </ul>
+        </section>` : "";
+
     document.getElementById("portfolio-result-values").innerHTML = `
-        <div class="solution-card"><span>Rendimiento esperado</span><strong>${formatNumber(result.rendimientos_portafolio)}</strong></div>
-        <div class="solution-card"><span>Volatilidad</span><strong>${formatNumber(result.volatilidad_portafolio)}</strong></div>
-        <div class="solution-card"><span>Utilidad ajustada por riesgo</span><strong>${formatNumber(result.utilidad_riesgo)}</strong></div>
-        <div class="solution-card"><span>Rendimiento anualizado (aprox.)</span><strong>${formatNumber(result.rendimiento_anualizado * 100)} %</strong></div>
-        <div class="solution-card"><span>Volatilidad anualizada (aprox.)</span><strong>${formatNumber(result.volatilidad_anualizada * 100)} %</strong></div>
-        ${result.ponderaciones.map((weight, index) => `<div class="solution-card"><span>${escapeHTML(result.modelo_snapshot.activos[index])}</span><strong>${formatNumber(weight * 100)} %</strong></div>`).join("")}`;
-    document.getElementById("portfolio-result-values").innerHTML +=
-        result.contribuciones_riesgo.map((risk, index) => `
-            <div class="solution-card">
-                <span>Contribución al riesgo · ${escapeHTML(result.modelo_snapshot.activos[index])}</span>
-                <strong>${formatNumber(risk.contribucion_volatilidad * 100)} % (${formatNumber(risk.proporcion_volatilidad * 100)} % del riesgo)</strong>
-            </div>`).join("") +
-        Object.entries(result.resultados_estres || {}).map(([scenario, value]) => `
-            <div class="solution-card">
-                <span>Escenario · ${escapeHTML(scenario)}</span>
-                <strong>${formatNumber(value * 100)} %</strong>
-            </div>`).join("");
+        <div class="portfolio-kpis">
+            <article class="portfolio-kpi is-primary">
+                <span>Rendimiento esperado anual</span>
+                <strong>${formatPercent(annualReturn)}</strong>
+                <small>${escapeHTML(periodNote)}</small>
+            </article>
+            <article class="portfolio-kpi">
+                <span>Volatilidad anualizada</span>
+                <strong>${formatPercent(annualRisk)}</strong>
+                <small>${escapeHTML(periodRiskNote)}</small>
+            </article>
+            <article class="portfolio-kpi">
+                <span>Utilidad ajustada por riesgo</span>
+                <strong>${formatMetric(result.utilidad_riesgo)}</strong>
+                <small>Lo que maximiza el optimizador</small>
+            </article>
+            <article class="portfolio-kpi">
+                <span>Activos con peso</span>
+                <strong>${invested.length} de ${allocation.length}</strong>
+                <small>${invested.length > 1 ? "Cartera diversificada" : "Cartera concentrada"}</small>
+            </article>
+        </div>
+        ${insight ? `<p class="portfolio-insight">${insight}</p>` : ""}
+        <section class="portfolio-result-block">
+            <h4>Distribución de la cartera</h4>
+            <div class="table-scroll">
+                <table class="allocation-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Activo</th>
+                            <th scope="col">Peso en la cartera</th>
+                            <th scope="col">Contribución al riesgo</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </section>
+        ${stressHtml}`;
     document.getElementById("portfolio-result").hidden = false;
     renderPortfolioComparisonInputs(result);
     await managePortfolio("history", id);
@@ -2658,7 +2839,7 @@ function renderProblem(problem) {
                 return `
                     <div class="constraint-row">
                         <span class="constraint-name">
-                            ${escapeHTML(constraint.nombre || `Restricción ${index + 1}`)}
+                            ${escapeHTML((constraint.nombre || `Restricción ${index + 1}`).replace(/_/g, " "))}
                         </span>
                         <span class="constraint-formula">
                             ${escapeHTML(expression)}
