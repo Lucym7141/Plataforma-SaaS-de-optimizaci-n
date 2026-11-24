@@ -1348,7 +1348,7 @@ function fillPortfolioForm(portfolio) {
     form.elements.limites_categoria.value = JSON.stringify(portfolio.limites_categoria);
     form.elements.periodos_por_anio.value = portfolio.periodos_por_anio;
     form.elements.escenarios_estres.value = JSON.stringify(portfolio.escenarios_estres);
-    form.elements.aversion_riesgo.value = portfolio.aversion_riesgo;
+    form.elements.aversion_riesgo.value = Number(portfolio.aversion_riesgo);
     const hasAdvancedOptions =
         Object.keys(portfolio.limites_categoria || {}).length > 0 ||
         Object.keys(portfolio.escenarios_estres || {}).length > 0;
@@ -1438,7 +1438,7 @@ function renderPortfolioEditor() {
     }
     const state = portfolioEditorState;
     const numberInput = (attributes, value) =>
-        `<input type="number" step="any" inputmode="decimal" ${attributes} value="${escapeHTML(String(value))}">`;
+        `<input type="number" step="any" inputmode="decimal" ${attributes} value="${escapeHTML(String(Number(value)))}">`;
 
     const rows = state.names.map((name, index) => `
         <tr>
