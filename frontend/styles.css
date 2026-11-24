@@ -5874,3 +5874,56 @@ body.dark .history-status.is-bad {
     justify-self: start;
     width: auto;
 }
+
+/* Bienvenida con datos de ejemplo (cuentas vacías) */
+.onboarding-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px 28px;
+    margin: 6px 0 18px;
+    padding: 22px 24px;
+    background:
+        radial-gradient(circle at 100% 0, rgba(20, 184, 166, 0.16), transparent 55%),
+        var(--surface);
+    border: 1px solid var(--primary-border);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+}
+
+.onboarding-card[hidden] {
+    display: none;
+}
+
+.onboarding-copy {
+    flex: 1 1 360px;
+    min-width: 0;
+}
+
+.onboarding-copy h2 {
+    margin: 6px 0 6px;
+    font-size: 21px;
+}
+
+.onboarding-copy p:last-child {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.onboarding-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.onboarding-actions a.secondary-button {
+    display: inline-flex;
+    align-items: center;
+    text-decoration: none;
+}
+
+#demo-data-message {
+    margin: 0 0 16px;
+}

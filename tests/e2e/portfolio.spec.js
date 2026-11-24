@@ -771,6 +771,7 @@ test("user can customize profile details and photo", async ({ page }) => {
     await page.getByRole("button", { name: "Mi perfil", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "Mi perfil" })).toBeVisible();
     for (const action of [
+        "Cargar datos de ejemplo",
         "Exportar mis datos",
         "Cambiar contraseña",
         "Eliminar cuenta",
@@ -783,7 +784,7 @@ test("user can customize profile details and photo", async ({ page }) => {
     await expect(page.locator("#profile-drawer .profile-form-fields label svg"))
         .toHaveCount(3);
     await expect(page.locator("#profile-drawer .account-action-icon svg"))
-        .toHaveCount(4);
+        .toHaveCount(5);
     await expect(page.locator("#profile-drawer .account-settings-heading h3 svg"))
         .toBeVisible();
     await expect(page.locator("#profile-drawer .account-action-button").first())
@@ -1545,4 +1546,69 @@ test("the assistant chat adjusts the draft, asks when unsure and can undo", asyn
     await expect(form.locator(".problem-author-constraint")).toHaveCount(0);
     await expect(chat.locator(".model-chat-asistente").last())
         .toContainText("Deshice el último cambio.");
+});
+
+test("demo data loads solved example models and portfolio once", async ({ page }) => {
+    // Puede esperar el límite de cálculos por minuto si otras pruebas resolvieron antes.
+    test.setTimeout(240_000);
+    await signIn(page);
+    const deleteDemoItems = () => page.evaluate(async () => {
+        const token = document.cookie.split("; ")
+            .find((item) => item.startsWith("csrftoken="))?.split("=")[1];
+        const headers = token ? { "X-CSRFToken": token } : {};
+        const [problems, portfolios] = await Promise.all([
+            fetch("/api/problemas/").then((response) => response.json()),
+            fetch("/api/portafolios/").then((response) => response.json())
+        ]);
+        await Promise.all(problems.filter((item) => item.nombre.startsWith("Ejemplo · "))
+            .map((item) => fetch(`/api/problemas/${item.id}/`, { method: "DELETE", headers })));
+        await Promise.all(portfolios.filter((item) => item.nombre.startsWith("Ejemplo · "))
+            .map((item) => fetch(`/api/portafolios/${item.id}/`, { method: "DELETE", headers })));
+    });
+    await deleteDemoItems();
+    await page.reload();
+    await expect(page.locator("#dashboard")).toBeVisible();
+    // La cuenta E2E ya tiene datos, así que la bienvenida no aparece.
+    await expect(page.locator("#dashboard-onboarding")).toBeHidden();
+
+    await page.locator(".dashboard-user-card").click();
+    const drawer = page.getByRole("dialog", { name: "Mi perfil" });
+    await expect(drawer).toBeVisible();
+    await drawer.getByRole("button", { name: /Cargar datos de ejemplo/ }).click();
+    await expect(drawer).toBeHidden();
+
+    const message = page.locator("#demo-data-message");
+    await expect(message).toContainText("Ejemplos listos", { timeout: 180_000 });
+
+    const data = await page.evaluate(async () => {
+        const [problems, portfolios] = await Promise.all([
+            fetch("/api/problemas/").then((response) => response.json()),
+            fetch("/api/portafolios/").then((response) => response.json())
+        ]);
+        return { problems, portfolios };
+    });
+    const demoProblems = data.problems.filter((item) => item.nombre.startsWith("Ejemplo · "));
+    const demoPortfolios = data.portfolios.filter((item) => item.nombre.startsWith("Ejemplo · "));
+    expect(demoProblems.map((item) => item.nombre).sort()).toEqual([
+        "Ejemplo · Distribución desde dos bodegas",
+        "Ejemplo · Plan de producción de muebles"
+    ]);
+    expect(demoPortfolios.map((item) => item.nombre)).toEqual(["Ejemplo · Cartera balanceada"]);
+
+    const histories = await page.evaluate(async ({ problemIds, portfolioId }) => {
+        const problemRuns = await Promise.all(problemIds.map((id) =>
+            fetch(`/api/problemas/${id}/historial/`).then((response) => response.json())));
+        const portfolioRuns = await fetch(`/api/portafolios/${portfolioId}/historial/`)
+            .then((response) => response.json());
+        return { problemRuns, portfolioRuns };
+    }, { problemIds: demoProblems.map((item) => item.id), portfolioId: demoPortfolios[0].id });
+    histories.problemRuns.forEach((runs) => expect(runs[0].estado).toBe("OPT"));
+    expect(histories.portfolioRuns).toHaveLength(1);
+
+    // Volver a cargarlos no duplica nada.
+    await page.locator(".dashboard-user-card").click();
+    await drawer.getByRole("button", { name: /Cargar datos de ejemplo/ }).click();
+    await expect(message).toContainText("ya estaban cargados", { timeout: 30_000 });
+
+    await deleteDemoItems();
 });

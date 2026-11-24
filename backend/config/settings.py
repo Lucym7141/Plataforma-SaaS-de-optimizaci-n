@@ -357,6 +357,15 @@ elif DEBUG:
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
             "NAME": os.environ.get("DJANGO_SQLITE_PATH", BASE_DIR / "db.sqlite3"),
+            # Evita «database is locked» con escrituras seguidas (p. ej. un
+            # cálculo que termina mientras llega otra petición): las
+            # transacciones toman el bloqueo de escritura desde el inicio,
+            # esperan hasta 20 s y WAL deja leer mientras otro escribe.
+            "OPTIONS": {
+                "timeout": 20,
+                "transaction_mode": "IMMEDIATE",
+                "init_command": "PRAGMA journal_mode=WAL;",
+            },
         }
     }
 else:
