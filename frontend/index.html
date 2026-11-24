@@ -362,6 +362,10 @@
                     <span id="account-name" class="account-identity"></span>
                 </div>
                 <div class="account-actions">
+                    <button class="account-action-button" type="button" data-load-demo>
+                        <span class="account-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/></svg></span>
+                        <span><strong data-demo-label>Cargar datos de ejemplo</strong><small>Dos modelos y una cartera ya resueltos</small></span>
+                    </button>
                     <button id="export-account-button" class="account-action-button" type="button">
                         <span class="account-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg></span>
                         <span><strong>Exportar mis datos</strong><small>Descarga una copia de tu información</small></span>
@@ -429,6 +433,21 @@
                     Actualizar
                 </button>
             </nav>
+            <section id="dashboard-onboarding" class="onboarding-card" aria-labelledby="onboarding-title" hidden>
+                <div class="onboarding-copy">
+                    <p class="section-label">PRIMEROS PASOS</p>
+                    <h2 id="onboarding-title">Mira Vértice en acción en un clic</h2>
+                    <p>Cargamos dos modelos de ejemplo (producción y distribución) y una cartera balanceada, ya resueltos, para que explores resultados, gráficos y explicaciones con IA.</p>
+                </div>
+                <div class="onboarding-actions">
+                    <button class="primary-button" type="button" data-load-demo>
+                        <svg class="button-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg>
+                        <span data-demo-label>Cargar datos de ejemplo</span>
+                    </button>
+                    <a class="secondary-button" href="#problem-workspace" data-focus-ai="problem">Crear mi primer modelo con IA</a>
+                </div>
+            </section>
+            <p id="demo-data-message" class="message success-message" role="status" aria-live="polite" hidden></p>
             <div id="dashboard-status" class="dashboard-status" role="status" aria-live="polite" hidden>
                 <span id="dashboard-status-text"></span>
                 <button id="dashboard-retry" class="secondary-button" type="button" hidden>Reintentar</button>

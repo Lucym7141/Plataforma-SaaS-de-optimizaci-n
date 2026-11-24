@@ -1763,6 +1763,11 @@ function renderDashboardKPIs(summary) {
         const element = document.getElementById(id);
         if (element) element.textContent = value ?? "—";
     });
+    // Una cuenta sin modelos ni portafolios ve la invitación a cargar ejemplos.
+    const onboarding = document.getElementById("dashboard-onboarding");
+    if (onboarding) {
+        onboarding.hidden = Number(summary.problemas) + Number(summary.portafolios) > 0;
+    }
 }
 
 function renderDashboardActivity(summary) {
@@ -3601,5 +3606,193 @@ if (themeToggle) {
     });
 }
 applyTheme(localStorage.getItem("theme") === "dark" ? "dark" : "light", false);
+
+// Datos de ejemplo: dos modelos y un portafolio ya resueltos para que una
+// cuenta nueva (o una demo) nunca se vea vacía. Usa la API normal, así que
+// respeta los límites del plan y no duplica ejemplos ya cargados.
+const demoVariable = (nombre, descripcion, unidad, tipo, superior = null) => ({
+    nombre, descripcion, unidad, tipo, limite_inferior: "0", limite_superior: superior
+});
+const demoTerms = (names, coefficients) =>
+    names.map((variable_nombre, index) => ({
+        variable_nombre,
+        coeficiente: String(coefficients[index])
+    }));
+
+const DEMO_FURNITURE = ["mesas", "sillas", "estantes"];
+const DEMO_ROUTES = ["norte_a", "norte_b", "norte_c", "sur_a", "sur_b", "sur_c"];
+const DEMO_PROBLEMS = [
+    {
+        nombre: "Ejemplo · Plan de producción de muebles",
+        descripcion: "Cuántas mesas, sillas y estantes fabricar a la semana para maximizar la utilidad con las horas de carpintería y pintura y la madera disponibles.",
+        tipo_objetivo: "MAX",
+        variables: [
+            demoVariable("mesas", "Mesas fabricadas por semana", "unidades", "ENT"),
+            demoVariable("sillas", "Sillas fabricadas por semana", "unidades", "ENT", "50"),
+            demoVariable("estantes", "Estantes fabricados por semana", "unidades", "ENT")
+        ],
+        terminos_objetivo: demoTerms(DEMO_FURNITURE, [40, 30, 25]),
+        restricciones: [
+            { nombre: "horas_carpinteria", operador: "LE", lado_derecho: "240", terminos: demoTerms(DEMO_FURNITURE, [4, 2, 3]) },
+            { nombre: "horas_pintura", operador: "LE", lado_derecho: "120", terminos: demoTerms(DEMO_FURNITURE, [2, 1, 2]) },
+            { nombre: "madera_m2", operador: "LE", lado_derecho: "300", terminos: demoTerms(DEMO_FURNITURE, [5, 2, 4]) }
+        ]
+    },
+    {
+        nombre: "Ejemplo · Distribución desde dos bodegas",
+        descripcion: "Cuánto enviar desde las bodegas Norte y Sur a tres tiendas para cubrir la demanda al menor costo de transporte.",
+        tipo_objetivo: "MIN",
+        variables: DEMO_ROUTES.map((route) => demoVariable(
+            route,
+            `Unidades enviadas de la bodega ${route.startsWith("norte") ? "Norte" : "Sur"} a la tienda ${route.slice(-1).toUpperCase()}`,
+            "unidades",
+            "CONT"
+        )),
+        terminos_objetivo: demoTerms(DEMO_ROUTES, [4, 6, 9, 5, 3, 4]),
+        restricciones: [
+            { nombre: "capacidad_norte", operador: "LE", lado_derecho: "120", terminos: demoTerms(DEMO_ROUTES, [1, 1, 1, 0, 0, 0]) },
+            { nombre: "capacidad_sur", operador: "LE", lado_derecho: "100", terminos: demoTerms(DEMO_ROUTES, [0, 0, 0, 1, 1, 1]) },
+            { nombre: "demanda_tienda_a", operador: "GE", lado_derecho: "60", terminos: demoTerms(DEMO_ROUTES, [1, 0, 0, 1, 0, 0]) },
+            { nombre: "demanda_tienda_b", operador: "GE", lado_derecho: "70", terminos: demoTerms(DEMO_ROUTES, [0, 1, 0, 0, 1, 0]) },
+            { nombre: "demanda_tienda_c", operador: "GE", lado_derecho: "50", terminos: demoTerms(DEMO_ROUTES, [0, 0, 1, 0, 0, 1]) }
+        ]
+    }
+];
+
+const DEMO_PORTFOLIO = {
+    nombre: "Ejemplo · Cartera balanceada",
+    activos: ["Acciones EE. UU.", "Acciones emergentes", "Bonos del Tesoro", "Oro"],
+    categorias: ["Renta variable", "Renta variable", "Renta fija", "Materias primas"],
+    rendimientos_esperados: [0.09, 0.11, 0.04, 0.05],
+    // Volatilidades de 16 %, 24 %, 6 % y 15 % con correlaciones ilustrativas.
+    covarianza: [
+        [0.0256, 0.0288, -0.00192, 0.0012],
+        [0.0288, 0.0576, -0.00144, 0.0054],
+        [-0.00192, -0.00144, 0.0036, 0.0018],
+        [0.0012, 0.0054, 0.0018, 0.0225]
+    ],
+    aversion_riesgo: 2,
+    pesos_minimos: [0, 0, 0.1, 0],
+    pesos_maximos: [0.6, 0.4, 0.7, 0.25],
+    limites_categoria: { "Renta variable": 0.7 },
+    periodos_por_anio: 1,
+    escenarios_estres: {
+        "Recesión": [-0.25, -0.35, 0.06, 0.08],
+        "Inflación alta": [-0.08, -0.12, -0.1, 0.15]
+    }
+};
+
+let demoLoading = false;
+
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+// El servidor limita los cálculos por minuto; si pide esperar, se espera y se
+// reintenta en lugar de dejar el ejemplo sin resolver.
+async function solveDemoItem(url, onProgress) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+            const job = await requestJSON(url, { method: "POST" });
+            return await waitForOptimizationJob(job);
+        } catch (error) {
+            if (error.status !== 429 || attempt === 2) throw error;
+            const seconds = Math.min(
+                Number(error.message.match(/(\d+)\s*(?:seconds?|segundos?)/i)?.[1]) || 60,
+                90
+            );
+            for (let remaining = seconds; remaining > 0; remaining -= 1) {
+                onProgress(`Esperando el límite de cálculos… ${remaining} s`);
+                await sleep(1000);
+            }
+        }
+    }
+    return null;
+}
+
+async function loadDemoData(onProgress) {
+    const [problems, portfolios] = await Promise.all([
+        requestJSON(`${API_URL}/problemas/`),
+        requestJSON(`${API_URL}/portafolios/`)
+    ]);
+    const problemsByName = new Map(problems.map((item) => [item.nombre, item]));
+    const portfoliosByName = new Map(portfolios.map((item) => [item.nombre, item]));
+    const jsonOptions = (payload) => ({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    // Cada tarea crea el ejemplo si falta, o lo resuelve si quedó sin resolver.
+    const tasks = [];
+    for (const problem of DEMO_PROBLEMS) {
+        const existing = problemsByName.get(problem.nombre);
+        if (existing) {
+            const runs = await requestJSON(`${API_URL}/problemas/${encodeURIComponent(existing.id)}/historial/`);
+            if (runs.length) continue;
+        }
+        tasks.push({ kind: "problemas", payload: problem, id: existing?.id });
+    }
+    const existingPortfolio = portfoliosByName.get(DEMO_PORTFOLIO.nombre);
+    let portfolioPending = !existingPortfolio;
+    if (existingPortfolio) {
+        const runs = await requestJSON(`${API_URL}/portafolios/${encodeURIComponent(existingPortfolio.id)}/historial/`);
+        portfolioPending = runs.length === 0;
+    }
+    if (portfolioPending) {
+        tasks.push({ kind: "portafolios", payload: DEMO_PORTFOLIO, id: existingPortfolio?.id });
+    }
+
+    for (const [index, task] of tasks.entries()) {
+        const step = (text) => onProgress(`${index + 1} de ${tasks.length} · ${text}`);
+        step("Creando…");
+        const id = task.id
+            ?? (await requestJSON(`${API_URL}/${task.kind}/`, jsonOptions(task.payload))).id;
+        step("Resolviendo…");
+        await solveDemoItem(
+            `${API_URL}/${task.kind}/${encodeURIComponent(id)}/resolver/`,
+            (text) => step(text)
+        );
+    }
+    return tasks.length;
+}
+
+async function handleDemoDataClick(button) {
+    if (demoLoading) return;
+    demoLoading = true;
+    const label = button.querySelector("[data-demo-label]") || button;
+    const originalText = label.textContent;
+    const message = document.getElementById("demo-data-message");
+    message.hidden = true;
+    message.classList.remove("error-message");
+    document.querySelectorAll("[data-load-demo]").forEach((item) => { item.disabled = true; });
+    button.setAttribute("aria-busy", "true");
+    try {
+        const created = await loadDemoData((text) => { label.textContent = text; });
+        message.textContent = created
+            ? "Ejemplos listos: abre «Ejemplo · Cartera balanceada» en Análisis o los modelos de ejemplo en Modelos."
+            : "Los ejemplos ya estaban cargados en tu cuenta.";
+        await Promise.all([loadProblems(), loadPortfolios()]);
+        await refreshDashboardAfterMutation();
+    } catch (error) {
+        message.textContent = `No se pudieron cargar todos los ejemplos: ${error.message}`;
+        message.classList.add("error-message");
+        await refreshDashboardAfterMutation();
+    } finally {
+        message.hidden = false;
+        label.textContent = originalText;
+        button.removeAttribute("aria-busy");
+        document.querySelectorAll("[data-load-demo]").forEach((item) => { item.disabled = false; });
+        demoLoading = false;
+    }
+}
+
+document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-load-demo]");
+    if (!button) return;
+    if (button.closest("#profile-drawer")) {
+        closeProfileDrawer();
+        navigateAppView("#dashboard");
+    }
+    handleDemoDataClick(button);
+});
 
 initialize();
