@@ -718,11 +718,15 @@ function getVariableName(term, variables = []) {
 }
 
 function formatExpression(terms, variables = []) {
-    if (!terms || terms.length === 0) {
+    const visible = (terms || []).filter((term) => {
+        const coefficient = Number(term.coeficiente);
+        return !Number.isFinite(coefficient) || coefficient !== 0;
+    });
+    if (visible.length === 0) {
         return "0";
     }
 
-    return terms.map((term, index) => {
+    return visible.map((term, index) => {
         const coefficient = Number(term.coeficiente);
         const variableName = getVariableName(term, variables);
 
@@ -732,9 +736,9 @@ function formatExpression(terms, variables = []) {
 
         const sign = coefficient < 0 ? "−" : "+";
         const absoluteValue = Math.abs(coefficient);
-        const coefficientText = formatNumber(absoluteValue);
-
-        let part = `${coefficientText} · ${variableName}`;
+        const part = absoluteValue === 1
+            ? variableName
+            : `${formatNumber(absoluteValue)} · ${variableName}`;
 
         if (index === 0) {
             return coefficient < 0 ? `−${part}` : part;
@@ -1172,30 +1176,123 @@ async function submitAuthRequest(event, endpoint, successMessage) {
     }
 }
 
-function showHistory(items, target, portfolio = false) {
-    target.innerHTML = items.length
-        ? items.map((item) => {
-            const date = item.creada_en || item.iniciada_en;
-            if (portfolio) {
-                return `<div class="solution-card">
-                    <span>${escapeHTML(new Date(date).toLocaleString())}</span>
-                    <strong>Rendimiento ${formatNumber(item.rendimientos_portafolio)} · Volatilidad ${formatNumber(item.volatilidad_portafolio)}</strong>
-                </div>
-                <div class="muted">${escapeHTML(JSON.stringify(item.ponderaciones))}</div>`;
-            }
-            return `<div class="solution-card">
-                <span>${escapeHTML(new Date(date).toLocaleString())} · ${escapeHTML(getStatusLabel(item.estado))}</span>
-                <strong>${escapeHTML(formatNumber(item.valor_objetivo))}</strong>
-            </div>`;
-        }).join("")
-        : '<p class="muted">Todavía no hay ejecuciones.</p>';
+const HISTORY_VISIBLE_ROWS = 6;
+
+function formatPercent(fraction, digits = 2) {
+    const number = Number(fraction);
+    if (fraction === null || fraction === undefined || !Number.isFinite(number)) {
+        return "—";
+    }
+    return `${new Intl.NumberFormat("es-CO", {
+        maximumFractionDigits: digits
+    }).format(number * 100)} %`;
 }
+
+function formatMetric(value, digits = 4) {
+    const number = Number(value);
+    if (value === null || value === undefined || !Number.isFinite(number)) return "—";
+    return new Intl.NumberFormat("es-CO", { maximumFractionDigits: digits }).format(number);
+}
+
+function portfolioAllocationChips(item, limit = 3) {
+    const names = item.modelo_snapshot?.activos || [];
+    const weights = (item.ponderaciones || [])
+        .map((weight, index) => ({
+            name: names[index] || `Activo ${index + 1}`,
+            weight: Number(weight)
+        }))
+        .filter((entry) => entry.weight >= 0.005)
+        .sort((first, second) => second.weight - first.weight);
+    if (!weights.length) return '<span class="muted">Sin asignación</span>';
+    const chips = weights.slice(0, limit).map((entry) =>
+        `<span class="history-chip">${escapeHTML(entry.name)} <strong>${formatPercent(entry.weight, 1)}</strong></span>`);
+    if (weights.length > limit) {
+        chips.push(`<span class="history-chip history-chip-more">+${weights.length - limit}</span>`);
+    }
+    return chips.join("");
+}
+
+function problemSolutionChips(item, limit = 4) {
+    const values = item.valores || [];
+    if (!values.length) return '<span class="muted">Sin valores</span>';
+    const chips = values.slice(0, limit).map((value) =>
+        `<span class="history-chip">${escapeHTML(value.variable_nombre || `Variable ${value.variable}`)} <strong>${escapeHTML(formatMetric(value.valor))}</strong></span>`);
+    if (values.length > limit) {
+        chips.push(`<span class="history-chip history-chip-more">+${values.length - limit}</span>`);
+    }
+    return chips.join("");
+}
+
+function showHistory(items, target, portfolio = false) {
+    if (!items.length) {
+        target.innerHTML = '<p class="history-empty">Todavía no hay ejecuciones.</p>';
+        return;
+    }
+    const header = portfolio
+        ? `<th scope="col">Fecha</th>
+           <th scope="col" class="numeric">Rendimiento anual</th>
+           <th scope="col" class="numeric">Volatilidad anual</th>
+           <th scope="col">Distribución principal</th>`
+        : `<th scope="col">Fecha</th>
+           <th scope="col">Estado</th>
+           <th scope="col" class="numeric">Valor objetivo</th>
+           <th scope="col">Solución</th>`;
+    const rows = items.map((item, index) => {
+        const date = formatDashboardDate(item.creada_en || item.iniciada_en);
+        const hidden = index >= HISTORY_VISIBLE_ROWS ? " hidden data-history-extra" : "";
+        if (portfolio) {
+            const annualReturn = item.rendimiento_anualizado ?? item.rendimientos_portafolio;
+            const annualRisk = item.volatilidad_anualizada ?? item.volatilidad_portafolio;
+            return `<tr${hidden}>
+                <td data-label="Fecha">${escapeHTML(date)}</td>
+                <td data-label="Rendimiento anual" class="numeric">${formatPercent(annualReturn)}</td>
+                <td data-label="Volatilidad anual" class="numeric">${formatPercent(annualRisk)}</td>
+                <td data-label="Distribución"><div class="history-chips">${portfolioAllocationChips(item)}</div></td>
+            </tr>`;
+        }
+        const ok = item.estado === "OPT";
+        return `<tr${hidden}>
+            <td data-label="Fecha">${escapeHTML(date)}</td>
+            <td data-label="Estado"><span class="history-status ${ok ? "is-ok" : "is-bad"}">${escapeHTML(getStatusLabel(item.estado))}</span></td>
+            <td data-label="Valor objetivo" class="numeric">${escapeHTML(formatMetric(item.valor_objetivo))}</td>
+            <td data-label="Solución"><div class="history-chips">${problemSolutionChips(item)}</div></td>
+        </tr>`;
+    }).join("");
+    const extra = items.length - HISTORY_VISIBLE_ROWS;
+    target.innerHTML = `
+        <div class="table-scroll">
+            <table class="history-table">
+                <thead><tr>${header}</tr></thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>
+        ${extra > 0 ? `<button class="secondary-button history-toggle" type="button" data-history-toggle aria-expanded="false">Ver todo el historial (${items.length})</button>` : ""}`;
+}
+
+document.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-history-toggle]");
+    if (!toggle) return;
+    const container = toggle.parentElement;
+    const expanded = toggle.getAttribute("aria-expanded") === "true";
+    container.querySelectorAll("[data-history-extra]").forEach((row) => {
+        row.hidden = expanded;
+    });
+    toggle.setAttribute("aria-expanded", String(!expanded));
+    const total = container.querySelectorAll("tbody tr").length;
+    toggle.textContent = expanded ? `Ver todo el historial (${total})` : "Ver menos";
+});
 
 function portfolioPayload() {
     const form = document.getElementById("portfolio-form");
     const parseOptionalJson = (value, fallback) =>
         value.trim() ? JSON.parse(value) : fallback;
+    if (!form.elements.nombre.value.trim()) {
+        throw new Error("Escribe un nombre para el portafolio.");
+    }
     const assetNames = form.elements.activos.value.split(",").map((name) => name.trim());
+    if (!assetNames.some(Boolean)) {
+        throw new Error("Añade al menos un activo.");
+    }
     const categories = form.elements.categorias.value.trim()
         ? form.elements.categorias.value.split(",").map((name) => name.trim())
         : assetNames.map(() => "");
@@ -1234,6 +1331,7 @@ function resetPortfolioForm() {
     document.getElementById("portfolio-cancel-edit").hidden = true;
     document.querySelector("#portfolio-form button[type='submit']").textContent =
         "Guardar portafolio";
+    renderPortfolioEditor();
 }
 
 function fillPortfolioForm(portfolio) {
@@ -1251,7 +1349,282 @@ function fillPortfolioForm(portfolio) {
     form.elements.periodos_por_anio.value = portfolio.periodos_por_anio;
     form.elements.escenarios_estres.value = JSON.stringify(portfolio.escenarios_estres);
     form.elements.aversion_riesgo.value = portfolio.aversion_riesgo;
+    const hasAdvancedOptions =
+        Object.keys(portfolio.limites_categoria || {}).length > 0 ||
+        Object.keys(portfolio.escenarios_estres || {}).length > 0;
+    if (hasAdvancedOptions) {
+        form.querySelector(".portfolio-advanced:not(.portfolio-json)").open = true;
+    }
+    renderPortfolioEditor();
 }
+
+// Editor visual del portafolio: una tabla de activos (en %) y la matriz de
+// covarianza en cuadrícula. Los campos JSON del formulario siguen siendo la
+// fuente de datos; el editor los lee y los vuelve a escribir.
+const PORTFOLIO_JSON_FIELDS = [
+    "activos", "categorias", "rendimientos", "covarianza", "pesos_minimos", "pesos_maximos"
+];
+
+function toPercent(value) {
+    return Number((Number(value) * 100).toFixed(6));
+}
+
+function fromPercent(value) {
+    return Number((Number(value) / 100).toFixed(8));
+}
+
+function volatilityText(variance) {
+    const value = Number(variance);
+    return value > 0
+        ? `${formatNumber(Number(toPercent(Math.sqrt(value)).toFixed(2)))} %`
+        : "—";
+}
+
+function readPortfolioEditorState() {
+    const form = document.getElementById("portfolio-form");
+    const parseList = (value, fallback) => {
+        const parsed = value.trim() ? JSON.parse(value) : fallback;
+        if (!Array.isArray(parsed)) throw new SyntaxError("Se esperaba una lista.");
+        return parsed;
+    };
+    const names = form.elements.activos.value.trim()
+        ? form.elements.activos.value.split(",").map((name) => name.trim())
+        : [];
+    const size = names.length;
+    const fit = (list, filler) =>
+        Array.from({ length: size }, (_, index) =>
+            list[index] === undefined || list[index] === null ? filler : list[index]);
+    const categoryText = form.elements.categorias.value.trim();
+    const categories = categoryText
+        ? categoryText.split(",").map((name) => name.trim())
+        : [];
+    const covariance = parseList(form.elements.covarianza.value, []);
+    return {
+        names,
+        categories: fit(categories, ""),
+        returns: fit(parseList(form.elements.rendimientos.value, []), 0),
+        minimums: fit(parseList(form.elements.pesos_minimos.value, []), 0),
+        maximums: fit(parseList(form.elements.pesos_maximos.value, []), 1),
+        covariance: Array.from({ length: size }, (_, row) =>
+            fit(Array.isArray(covariance[row]) ? covariance[row] : [], 0))
+    };
+}
+
+function writePortfolioEditorState(state) {
+    const form = document.getElementById("portfolio-form");
+    form.elements.activos.value = state.names.join(", ");
+    form.elements.categorias.value = state.categories.some(Boolean)
+        ? state.categories.join(", ")
+        : "";
+    form.elements.rendimientos.value = JSON.stringify(state.returns);
+    form.elements.covarianza.value = JSON.stringify(state.covariance);
+    form.elements.pesos_minimos.value = JSON.stringify(state.minimums);
+    form.elements.pesos_maximos.value = JSON.stringify(state.maximums);
+}
+
+let portfolioEditorState = null;
+
+function renderPortfolioEditor() {
+    const assetsEditor = document.getElementById("portfolio-assets-editor");
+    const covarianceEditor = document.getElementById("portfolio-covariance-editor");
+    try {
+        portfolioEditorState = readPortfolioEditorState();
+    } catch {
+        portfolioEditorState = null;
+        const note = '<p class="portfolio-editor-note">Corrige el texto JSON de «Editar los datos como texto» para ver las tablas.</p>';
+        assetsEditor.innerHTML = note;
+        covarianceEditor.innerHTML = "";
+        return;
+    }
+    const state = portfolioEditorState;
+    const numberInput = (attributes, value) =>
+        `<input type="number" step="any" inputmode="decimal" ${attributes} value="${escapeHTML(String(value))}">`;
+
+    const rows = state.names.map((name, index) => `
+        <tr>
+            <td data-label="Activo">
+                <input type="text" maxlength="80" data-asset-field="name" data-index="${index}"
+                    aria-label="Nombre del activo ${index + 1}" value="${escapeHTML(name)}" placeholder="Activo ${index + 1}">
+            </td>
+            <td data-label="Categoría">
+                <input type="text" maxlength="80" data-asset-field="category" data-index="${index}"
+                    aria-label="Categoría de ${escapeHTML(name || `activo ${index + 1}`)}" value="${escapeHTML(state.categories[index])}" placeholder="Opcional">
+            </td>
+            <td data-label="Rendimiento esperado">
+                <span class="portfolio-percent-input">${numberInput(
+                    `data-asset-field="return" data-index="${index}" aria-label="Rendimiento esperado de ${escapeHTML(name || `activo ${index + 1}`)} en porcentaje"`,
+                    toPercent(state.returns[index])
+                )}<span aria-hidden="true">%</span></span>
+            </td>
+            <td data-label="Peso mínimo">
+                <span class="portfolio-percent-input">${numberInput(
+                    `min="0" max="100" data-asset-field="minimum" data-index="${index}" aria-label="Peso mínimo de ${escapeHTML(name || `activo ${index + 1}`)} en porcentaje"`,
+                    toPercent(state.minimums[index])
+                )}<span aria-hidden="true">%</span></span>
+            </td>
+            <td data-label="Peso máximo">
+                <span class="portfolio-percent-input">${numberInput(
+                    `min="0" max="100" data-asset-field="maximum" data-index="${index}" aria-label="Peso máximo de ${escapeHTML(name || `activo ${index + 1}`)} en porcentaje"`,
+                    toPercent(state.maximums[index])
+                )}<span aria-hidden="true">%</span></span>
+            </td>
+            <td class="portfolio-asset-remove">
+                <button class="icon-button" type="button" data-remove-asset="${index}"
+                    aria-label="Quitar ${escapeHTML(name || `activo ${index + 1}`)}" title="Quitar activo">✕</button>
+            </td>
+        </tr>`).join("");
+
+    assetsEditor.innerHTML = `
+        ${state.names.length ? `
+        <div class="table-scroll">
+            <table class="portfolio-assets-table">
+                <thead>
+                    <tr>
+                        <th scope="col">Activo</th>
+                        <th scope="col">Categoría</th>
+                        <th scope="col">Rendimiento esperado</th>
+                        <th scope="col">Peso mínimo</th>
+                        <th scope="col">Peso máximo</th>
+                        <th scope="col"><span class="visually-hidden">Acciones</span></th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>` : '<p class="portfolio-editor-note">Todavía no hay activos. Añade el primero o genera un borrador con IA.</p>'}
+        <button class="secondary-button" type="button" data-add-asset>＋ Añadir activo</button>`;
+
+    if (!state.names.length) {
+        covarianceEditor.innerHTML =
+            '<p class="portfolio-editor-note">La matriz aparecerá cuando añadas activos.</p>';
+        return;
+    }
+    const label = (index) => escapeHTML(state.names[index] || `Activo ${index + 1}`);
+    const header = state.names.map((_, index) =>
+        `<th scope="col" data-asset-label="${index}">${label(index)}</th>`).join("");
+    const body = state.covariance.map((row, rowIndex) => `
+        <tr>
+            <th scope="row" data-asset-label="${rowIndex}">${label(rowIndex)}</th>
+            ${row.map((value, columnIndex) => `
+                <td class="${rowIndex === columnIndex ? "is-diagonal" : ""}">${numberInput(
+                    `data-cov-row="${rowIndex}" data-cov-col="${columnIndex}" aria-label="Covarianza entre ${label(rowIndex)} y ${label(columnIndex)}"`,
+                    value
+                )}</td>`).join("")}
+        </tr>`).join("");
+    const volatilities = state.names.map((_, index) => {
+        const text = volatilityText(state.covariance[index][index]);
+        return `<span class="portfolio-volatility-chip"><span data-asset-label="${index}">${label(index)}</span><strong data-volatility="${index}">${text}</strong></span>`;
+    }).join("");
+    covarianceEditor.innerHTML = `
+        <div class="table-scroll">
+            <table class="portfolio-covariance-table">
+                <thead><tr><th scope="col"><span class="visually-hidden">Activo</span></th>${header}</tr></thead>
+                <tbody>${body}</tbody>
+            </table>
+        </div>
+        <div class="portfolio-volatilities" aria-live="polite">
+            <span class="portfolio-hint">Volatilidad implícita (raíz de la diagonal):</span>
+            ${volatilities}
+        </div>`;
+}
+
+function updateVolatilityChip(index) {
+    const chip = document.querySelector(`[data-volatility="${index}"]`);
+    if (!chip || !portfolioEditorState) return;
+    chip.textContent = volatilityText(portfolioEditorState.covariance[index][index]);
+}
+
+function resizePortfolioState(state, size) {
+    const resize = (list, filler) =>
+        Array.from({ length: size }, (_, index) => (index < list.length ? list[index] : filler));
+    state.categories = resize(state.categories, "");
+    state.returns = resize(state.returns, 0);
+    state.minimums = resize(state.minimums, 0);
+    state.maximums = resize(state.maximums, 1);
+    state.covariance = Array.from({ length: size }, (_, row) =>
+        Array.from({ length: size }, (_, column) =>
+            (row < state.covariance.length && column < state.covariance.length
+                ? state.covariance[row][column]
+                : 0)));
+}
+
+document.getElementById("portfolio-assets-editor").addEventListener("input", (event) => {
+    const input = event.target.closest("[data-asset-field]");
+    if (!input || !portfolioEditorState) return;
+    const index = Number(input.dataset.index);
+    const state = portfolioEditorState;
+    const field = input.dataset.assetField;
+    if (field === "name" || field === "category") {
+        // La coma separa los activos en el formato de texto.
+        const clean = input.value.replace(/,/g, " ");
+        if (clean !== input.value) input.value = clean;
+        if (field === "name") {
+            state.names[index] = clean.trim();
+            document.querySelectorAll(`[data-asset-label="${index}"]`).forEach((cell) => {
+                cell.textContent = state.names[index] || `Activo ${index + 1}`;
+            });
+        } else {
+            state.categories[index] = clean.trim();
+        }
+    } else {
+        if (input.value === "" || Number.isNaN(Number(input.value))) return;
+        const key = { return: "returns", minimum: "minimums", maximum: "maximums" }[field];
+        state[key][index] = fromPercent(input.value);
+    }
+    writePortfolioEditorState(state);
+});
+
+document.getElementById("portfolio-assets-editor").addEventListener("click", (event) => {
+    if (!portfolioEditorState) return;
+    const state = portfolioEditorState;
+    if (event.target.closest("[data-add-asset]")) {
+        state.names.push(`Activo ${state.names.length + 1}`);
+        resizePortfolioState(state, state.names.length);
+        writePortfolioEditorState(state);
+        renderPortfolioEditor();
+        const inputs = document.querySelectorAll('[data-asset-field="name"]');
+        inputs[inputs.length - 1]?.select();
+        return;
+    }
+    const remove = event.target.closest("[data-remove-asset]");
+    if (!remove) return;
+    const index = Number(remove.dataset.removeAsset);
+    state.names.splice(index, 1);
+    state.categories.splice(index, 1);
+    state.returns.splice(index, 1);
+    state.minimums.splice(index, 1);
+    state.maximums.splice(index, 1);
+    state.covariance.splice(index, 1);
+    state.covariance.forEach((row) => row.splice(index, 1));
+    writePortfolioEditorState(state);
+    renderPortfolioEditor();
+});
+
+document.getElementById("portfolio-covariance-editor").addEventListener("input", (event) => {
+    const input = event.target.closest("[data-cov-row]");
+    if (!input || !portfolioEditorState) return;
+    if (input.value === "" || Number.isNaN(Number(input.value))) return;
+    const row = Number(input.dataset.covRow);
+    const column = Number(input.dataset.covCol);
+    const value = Number(input.value);
+    const state = portfolioEditorState;
+    state.covariance[row][column] = value;
+    state.covariance[column][row] = value;
+    if (row !== column) {
+        const mirror = document.querySelector(
+            `[data-cov-row="${column}"][data-cov-col="${row}"]`
+        );
+        if (mirror) mirror.value = input.value;
+    } else {
+        updateVolatilityChip(row);
+    }
+    writePortfolioEditorState(state);
+});
+
+PORTFOLIO_JSON_FIELDS.forEach((name) => {
+    document.getElementById("portfolio-form").elements[name]
+        .addEventListener("input", renderPortfolioEditor);
+});
+renderPortfolioEditor();
 
 function formatDashboardDate(value) {
     if (!value) return "Sin fecha";
@@ -1932,24 +2305,114 @@ async function renderPortfolioResult(result, id) {
     selectedPortfolioId = id;
     lastPortfolioExecutionId = result.id;
     resetExplanation("portfolio", result);
+    const snapshot = result.modelo_snapshot || {};
+    const names = snapshot.activos || [];
+    const categories = snapshot.categorias || [];
+    const periods = Number(snapshot.periodos_por_anio) || 1;
+    const contributions = result.contribuciones_riesgo || [];
+    const allocation = (result.ponderaciones || []).map((weight, index) => ({
+        name: names[index] || `Activo ${index + 1}`,
+        category: categories[index] || "",
+        weight: Number(weight) || 0,
+        riskShare: Number(contributions[index]?.proporcion_volatilidad) || 0,
+        riskContribution: contributions[index]?.contribucion_volatilidad,
+        maxWeight: Number(snapshot.pesos_maximos?.[index] ?? 1)
+    })).sort((first, second) =>
+        second.weight - first.weight || second.riskShare - first.riskShare);
+    const invested = allocation.filter((entry) => entry.weight >= 0.005);
+    const top = allocation[0];
+    const annualReturn = result.rendimiento_anualizado ?? result.rendimientos_portafolio;
+    const annualRisk = result.volatilidad_anualizada ?? result.volatilidad_portafolio;
+    const periodNote = periods > 1
+        ? `Por periodo: ${formatPercent(result.rendimientos_portafolio)}`
+        : "Según tus supuestos";
+    const periodRiskNote = periods > 1
+        ? `Por periodo: ${formatPercent(result.volatilidad_portafolio)}`
+        : "Desviación estándar de la cartera";
+
+    let insight = "";
+    if (top && top.weight >= 0.995) {
+        insight = `Toda la cartera queda en <strong>${escapeHTML(top.name)}</strong>: con estos supuestos no hay diversificación. Revisa los límites de peso o sube la aversión al riesgo si quieres repartirla.`;
+    } else if (top && top.weight >= 0.6) {
+        const atLimit = top.maxWeight < 1 && Math.abs(top.weight - top.maxWeight) < 0.005;
+        insight = atLimit
+            ? `<strong>${escapeHTML(top.name)}</strong> concentra el ${formatPercent(top.weight, 1)} del peso y llegó a su peso máximo: el optimizador le asignaría más si el límite lo permitiera.`
+            : `<strong>${escapeHTML(top.name)}</strong> concentra el ${formatPercent(top.weight, 1)} del peso. Puedes limitarlo con un peso máximo.`;
+    } else if (invested.length > 1) {
+        insight = `La cartera se reparte entre ${invested.length} activos; el mayor peso es <strong>${escapeHTML(top.name)}</strong> con ${formatPercent(top.weight, 1)}.`;
+    }
+
+    const bar = (fraction, tone) => {
+        const width = Math.max(0, Math.min(100, fraction * 100)).toFixed(2);
+        return `<span class="allocation-bar ${tone}" aria-hidden="true"><span style="width:${width}%"></span></span>`;
+    };
+    const rows = allocation.map((entry) => `
+        <tr class="${entry.weight < 0.005 ? "is-empty" : ""}">
+            <th scope="row">
+                <span class="allocation-name">${escapeHTML(entry.name)}</span>
+                ${entry.category ? `<span class="allocation-category">${escapeHTML(entry.category)}</span>` : ""}
+            </th>
+            <td>
+                <div class="allocation-cell">${bar(entry.weight, "is-weight")}<strong>${formatPercent(entry.weight, 1)}</strong></div>
+            </td>
+            <td>
+                <div class="allocation-cell" title="Aporta ${formatPercent(entry.riskContribution)} de volatilidad">${bar(entry.riskShare, "is-risk")}<strong>${formatPercent(entry.riskShare, 1)}</strong></div>
+            </td>
+        </tr>`).join("");
+
+    const stress = Object.entries(result.resultados_estres || {});
+    const stressHtml = stress.length ? `
+        <section class="portfolio-result-block">
+            <h4>Escenarios de estrés</h4>
+            <ul class="stress-list">
+                ${stress.map(([scenario, value]) => `
+                    <li>
+                        <span>${escapeHTML(scenario)}</span>
+                        <strong class="${Number(value) < 0 ? "is-negative" : "is-positive"}">${formatPercent(value)}</strong>
+                    </li>`).join("")}
+            </ul>
+        </section>` : "";
+
     document.getElementById("portfolio-result-values").innerHTML = `
-        <div class="solution-card"><span>Rendimiento esperado</span><strong>${formatNumber(result.rendimientos_portafolio)}</strong></div>
-        <div class="solution-card"><span>Volatilidad</span><strong>${formatNumber(result.volatilidad_portafolio)}</strong></div>
-        <div class="solution-card"><span>Utilidad ajustada por riesgo</span><strong>${formatNumber(result.utilidad_riesgo)}</strong></div>
-        <div class="solution-card"><span>Rendimiento anualizado (aprox.)</span><strong>${formatNumber(result.rendimiento_anualizado * 100)} %</strong></div>
-        <div class="solution-card"><span>Volatilidad anualizada (aprox.)</span><strong>${formatNumber(result.volatilidad_anualizada * 100)} %</strong></div>
-        ${result.ponderaciones.map((weight, index) => `<div class="solution-card"><span>${escapeHTML(result.modelo_snapshot.activos[index])}</span><strong>${formatNumber(weight * 100)} %</strong></div>`).join("")}`;
-    document.getElementById("portfolio-result-values").innerHTML +=
-        result.contribuciones_riesgo.map((risk, index) => `
-            <div class="solution-card">
-                <span>Contribución al riesgo · ${escapeHTML(result.modelo_snapshot.activos[index])}</span>
-                <strong>${formatNumber(risk.contribucion_volatilidad * 100)} % (${formatNumber(risk.proporcion_volatilidad * 100)} % del riesgo)</strong>
-            </div>`).join("") +
-        Object.entries(result.resultados_estres || {}).map(([scenario, value]) => `
-            <div class="solution-card">
-                <span>Escenario · ${escapeHTML(scenario)}</span>
-                <strong>${formatNumber(value * 100)} %</strong>
-            </div>`).join("");
+        <div class="portfolio-kpis">
+            <article class="portfolio-kpi is-primary">
+                <span>Rendimiento esperado anual</span>
+                <strong>${formatPercent(annualReturn)}</strong>
+                <small>${escapeHTML(periodNote)}</small>
+            </article>
+            <article class="portfolio-kpi">
+                <span>Volatilidad anualizada</span>
+                <strong>${formatPercent(annualRisk)}</strong>
+                <small>${escapeHTML(periodRiskNote)}</small>
+            </article>
+            <article class="portfolio-kpi">
+                <span>Utilidad ajustada por riesgo</span>
+                <strong>${formatMetric(result.utilidad_riesgo)}</strong>
+                <small>Lo que maximiza el optimizador</small>
+            </article>
+            <article class="portfolio-kpi">
+                <span>Activos con peso</span>
+                <strong>${invested.length} de ${allocation.length}</strong>
+                <small>${invested.length > 1 ? "Cartera diversificada" : "Cartera concentrada"}</small>
+            </article>
+        </div>
+        ${insight ? `<p class="portfolio-insight">${insight}</p>` : ""}
+        <section class="portfolio-result-block">
+            <h4>Distribución de la cartera</h4>
+            <div class="table-scroll">
+                <table class="allocation-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Activo</th>
+                            <th scope="col">Peso en la cartera</th>
+                            <th scope="col">Contribución al riesgo</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </div>
+        </section>
+        ${stressHtml}`;
     document.getElementById("portfolio-result").hidden = false;
     renderPortfolioComparisonInputs(result);
     await managePortfolio("history", id);
@@ -2376,7 +2839,7 @@ function renderProblem(problem) {
                 return `
                     <div class="constraint-row">
                         <span class="constraint-name">
-                            ${escapeHTML(constraint.nombre || `Restricción ${index + 1}`)}
+                            ${escapeHTML((constraint.nombre || `Restricción ${index + 1}`).replace(/_/g, " "))}
                         </span>
                         <span class="constraint-formula">
                             ${escapeHTML(expression)}
