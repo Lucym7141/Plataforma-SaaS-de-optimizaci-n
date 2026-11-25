@@ -930,8 +930,9 @@ function showAuthentication(message = "", tone = "info") {
     setNotificationsOpen(false);
     authPanel.hidden = false;
     appContent.hidden = true;
-    statusLabel.hidden = false;
-    statusLabel.innerHTML = '<span class="status-dot"></span> Acceso seguro';
+    statusLabel.hidden = true;
+    setPremiumLabel(false);
+    document.getElementById("demo-banner").hidden = true;
     resetDashboard();
     if (!resetCredentials) {
         authHelpActions.hidden = false;
@@ -1067,8 +1068,17 @@ function finishAuthFormBusy(form) {
     submit.classList.remove("is-loading");
 }
 
+// En la pantalla de acceso el enlace a planes es discreto; dentro de la app invita
+// a mejorar el plan.
+function setPremiumLabel(authenticated) {
+    const label = document.getElementById("premium-label");
+    if (label) label.textContent = authenticated ? "Hazte premium" : "Ver planes";
+}
+
 function showApplication(user) {
     document.body.classList.add("authenticated");
+    setPremiumLabel(true);
+    document.getElementById("demo-banner").hidden = !user.es_demo;
     authPanel.hidden = true;
     appContent.hidden = false;
     syncAppView();
@@ -3623,6 +3633,46 @@ document.getElementById("password-confirm-form").addEventListener("submit", asyn
     }
 });
 
+// «Ver una demo»: cuenta temporal con los ejemplos ya resueltos.
+document.getElementById("demo-button").addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    const label = button.querySelector("[data-demo-start-label]");
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    label.textContent = "Preparando la demo…";
+    try {
+        const user = await requestJSON(`${API_URL}/auth/demo/`, { method: "POST" });
+        showApplication(user);
+        await loadProblems();
+        const message = document.getElementById("demo-data-message");
+        message.classList.remove("error-message");
+        message.hidden = false;
+        try {
+            await loadDemoData((text) => { message.textContent = `Cargando ejemplos: ${text}`; });
+            message.textContent = "Ejemplos listos: abre «Ejemplo · Cartera balanceada» en Análisis o los modelos de ejemplo en Modelos.";
+        } catch (error) {
+            message.textContent = `No se pudieron cargar todos los ejemplos: ${error.message}`;
+            message.classList.add("error-message");
+        }
+        await Promise.all([loadProblems(), loadPortfolios()]);
+        await refreshDashboardAfterMutation();
+    } catch (error) {
+        setAuthMessage(`No se pudo abrir la demo: ${error.message}`, "error");
+    } finally {
+        button.disabled = false;
+        button.removeAttribute("aria-busy");
+        label.textContent = "Ver una demo sin registrarte";
+    }
+});
+
+document.getElementById("demo-signup-button").addEventListener("click", async () => {
+    try {
+        await requestJSON(`${API_URL}/auth/logout/`, { method: "POST" });
+    } finally {
+        window.location.href = "/?registro=1";
+    }
+});
+
 document.getElementById("logout-button").addEventListener("click", async () => {
     try {
         await requestJSON(`${API_URL}/auth/logout/`, { method: "POST" });
@@ -3750,6 +3800,10 @@ async function initialize() {
             try {
                 const config = await requestJSON(`${API_URL}/auth/config/`);
                 const registrationEnabled = Boolean(config.registration_enabled);
+                document.getElementById("demo-access").hidden = !config.demo_enabled;
+                document.querySelectorAll("[data-demo-ttl]").forEach((element) => {
+                    element.textContent = String(config.demo_ttl_hours || 24);
+                });
                 registerTab.hidden = !registrationEnabled;
                 authTabs.hidden = !registrationEnabled;
                 const currentTone = authMessage.classList.contains("error-message")
@@ -3761,6 +3815,10 @@ async function initialize() {
                         : "El registro de nuevas cuentas está cerrado.",
                     registrationEnabled ? currentTone : "info"
                 );
+                if (registrationEnabled && params.get("registro") === "1") {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    setAuthTab("register");
+                }
             } catch (configError) {
                 showAuthentication(
                     `No fue posible conectar: ${configError.message}`,

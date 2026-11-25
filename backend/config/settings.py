@@ -154,6 +154,11 @@ AUTH_SIGNUP_LIMIT = os.environ.get("AUTH_SIGNUP_LIMIT", "5/h")
 AUTH_LOGIN_LIMIT = os.environ.get("AUTH_LOGIN_LIMIT", "10/m")
 AUTH_PASSWORD_RESET_LIMIT = os.environ.get("AUTH_PASSWORD_RESET_LIMIT", "5/h")
 AUTH_VERIFY_LIMIT = os.environ.get("AUTH_VERIFY_LIMIT", "5/h")
+# Cuentas de demostración temporales («Ver una demo» en la pantalla de acceso).
+DEMO_ACCOUNTS_ENABLED = env_bool("DJANGO_DEMO_ACCOUNTS", ALLOW_REGISTRATION)
+DEMO_ACCOUNT_TTL_HOURS = int(os.environ.get("DEMO_ACCOUNT_TTL_HOURS", "24"))
+DEMO_AI_REQUESTS = int(os.environ.get("DEMO_AI_REQUESTS", "3"))
+AUTH_DEMO_LIMIT = os.environ.get("AUTH_DEMO_LIMIT", "5/h")
 OPTIMIZER_SOLVE_LIMIT = os.environ.get("OPTIMIZER_SOLVE_LIMIT", "5/m")
 AI_MODELING_LIMIT = os.environ.get("AI_MODELING_LIMIT", "5/h")
 # La conversación necesita más mensajes por hora que generar borradores.
@@ -175,6 +180,11 @@ AUTH_PASSWORD_RESET_LIMIT = validate_rate(
     AUTH_PASSWORD_RESET_LIMIT,
 )
 AUTH_VERIFY_LIMIT = validate_rate("AUTH_VERIFY_LIMIT", AUTH_VERIFY_LIMIT)
+AUTH_DEMO_LIMIT = validate_rate("AUTH_DEMO_LIMIT", AUTH_DEMO_LIMIT)
+if not 1 <= DEMO_ACCOUNT_TTL_HOURS <= 720:
+    raise ImproperlyConfigured("DEMO_ACCOUNT_TTL_HOURS debe estar entre 1 y 720.")
+if not 0 <= DEMO_AI_REQUESTS <= 100:
+    raise ImproperlyConfigured("DEMO_AI_REQUESTS debe estar entre 0 y 100.")
 OPTIMIZER_SOLVE_LIMIT = validate_rate(
     "OPTIMIZER_SOLVE_LIMIT",
     OPTIMIZER_SOLVE_LIMIT,
@@ -270,6 +280,7 @@ REST_FRAMEWORK = {
         'login': AUTH_LOGIN_LIMIT,
         'password_reset': AUTH_PASSWORD_RESET_LIMIT,
         'verify': AUTH_VERIFY_LIMIT,
+        'demo': AUTH_DEMO_LIMIT,
         'solve': OPTIMIZER_SOLVE_LIMIT,
         'ai_modeling': AI_MODELING_LIMIT,
         'ai_chat': AI_CHAT_LIMIT,

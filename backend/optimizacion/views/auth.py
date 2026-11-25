@@ -1,7 +1,9 @@
 """Registro, inicio de sesión, verificación y recuperación de cuentas."""
 
 import logging
+import secrets
 import smtplib
+from datetime import timedelta
 
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import get_user_model
@@ -11,12 +13,14 @@ from django.conf import settings
 from django.core import signing
 from django.db import transaction
 from django.http import JsonResponse
+from django.utils import timezone
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
 from ..models import (
+    PerfilUsuario,
     VerificacionCorreo,
 )
 from ..serializers import (
@@ -29,6 +33,7 @@ from ..account_services import (
     send_verification_email,
 )
 from ..throttles import (
+    DemoRateThrottle,
     InicioSesionRateThrottle,
     RestablecerContrasenaRateThrottle,
     RegistroRateThrottle,
@@ -298,7 +303,57 @@ def usuario_actual(request):
 def configuracion_autenticacion(request):
     return JsonResponse({
         "registration_enabled": settings.ALLOW_REGISTRATION,
+        "demo_enabled": settings.DEMO_ACCOUNTS_ENABLED,
+        "demo_ttl_hours": settings.DEMO_ACCOUNT_TTL_HOURS,
     })
+
+
+def _delete_expired_demos():
+    limit = timezone.now() - timedelta(hours=settings.DEMO_ACCOUNT_TTL_HOURS)
+    get_user_model().objects.filter(
+        perfil__es_demo=True,
+        date_joined__lt=limit,
+    ).delete()
+
+
+@csrf_protect
+@require_POST
+def iniciar_demo(request):
+    """Crea una cuenta temporal sin contraseña e inicia sesión con ella.
+
+    La cuenta se borra pasado DEMO_ACCOUNT_TTL_HOURS (al crear la siguiente
+    demo o con `manage.py limpiar_demos`) y tiene menos consultas de IA."""
+    throttle = DemoRateThrottle()
+    if not throttle.allow_request(request, None):
+        return _rate_limit_response(throttle)
+    if not settings.DEMO_ACCOUNTS_ENABLED:
+        return JsonResponse(
+            {"detail": "La demostración no está disponible."},
+            status=403,
+        )
+
+    _delete_expired_demos()
+    User = get_user_model()
+    with transaction.atomic():
+        for _ in range(5):
+            username = f"demo-{secrets.token_hex(4)}"
+            if not User.objects.filter(username=username).exists():
+                break
+        else:
+            return JsonResponse(
+                {"detail": "No se pudo crear la demostración. Inténtalo de nuevo."},
+                status=503,
+            )
+        usuario = User(username=username, is_active=True)
+        usuario.set_unusable_password()
+        usuario.save()
+        PerfilUsuario.objects.create(
+            usuario=usuario,
+            nombre_visible="Demo",
+            es_demo=True,
+        )
+    login(request, usuario, backend="django.contrib.auth.backends.ModelBackend")
+    return JsonResponse(_user_data(usuario), status=201)
 
 
 @csrf_protect

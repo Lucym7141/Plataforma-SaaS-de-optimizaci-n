@@ -17,7 +17,12 @@ def _json_body(request):
 
 
 def _user_data(user):
-    return {"id": user.pk, "username": user.get_username()}
+    profile = getattr(user, "perfil", None)
+    return {
+        "id": user.pk,
+        "username": user.get_username(),
+        "es_demo": bool(profile and profile.es_demo),
+    }
 
 
 def _rate_limit_response(throttle):

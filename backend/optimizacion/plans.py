@@ -46,7 +46,13 @@ def _limit(user, resource):
     plan, unlimited = user_plan(user)
     if unlimited:
         return plan, None
-    return plan, plan.get("limits", {}).get(resource)
+    limit = plan.get("limits", {}).get(resource)
+    if resource == "ai_requests_per_month":
+        profile = _profile(user)
+        if profile and profile.es_demo:
+            demo_limit = settings.DEMO_AI_REQUESTS
+            limit = demo_limit if limit is None else min(limit, demo_limit)
+    return plan, limit
 
 
 def _start_of_month():

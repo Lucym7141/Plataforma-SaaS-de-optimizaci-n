@@ -239,6 +239,7 @@ programador de tareas o cron del servidor):
 ```powershell
 docker compose exec web python manage.py cleanup_rate_limits
 docker compose exec web python manage.py cleanup_optimization_jobs
+docker compose exec web python manage.py limpiar_demos
 ```
 
 `docker compose logs -f web worker` muestra los registros. Los datos viven en
@@ -428,3 +429,13 @@ datos en el formulario; no guarda hasta que se confirme con “Guardar
 portafolio”. No se consultan proveedores de mercado ni se estima ningún dato.
 Los resultados dependen de los supuestos ingresados y no constituyen asesoría
 financiera.
+
+## Cuentas de demostración
+
+El botón «Ver una demo» de la pantalla de acceso crea una cuenta temporal sin
+contraseña, inicia sesión y carga los datos de ejemplo. Está activo cuando lo
+está el registro (`DJANGO_DEMO_ACCOUNTS`, predeterminado igual que
+`DJANGO_ALLOW_REGISTRATION`). Cada cuenta de demostración dura
+`DEMO_ACCOUNT_TTL_HOURS` (24 por defecto), tiene `DEMO_AI_REQUESTS` consultas
+de IA (3 por defecto) y se pueden crear `AUTH_DEMO_LIMIT` por IP (5 por hora).
+Las vencidas se borran al crear una nueva y con `manage.py limpiar_demos`.

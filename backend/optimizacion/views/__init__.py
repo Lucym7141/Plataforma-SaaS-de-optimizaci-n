@@ -13,6 +13,7 @@ from .auth import (  # noqa: F401
     usuario_actual,
     configuracion_autenticacion,
     cerrar_sesion,
+    iniciar_demo,
 )
 from .account import (  # noqa: F401
     perfil_usuario,

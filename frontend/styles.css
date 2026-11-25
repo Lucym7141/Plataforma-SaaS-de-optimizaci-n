@@ -6318,3 +6318,210 @@ body.dark .constraint-row.is-binding .constraint-status {
         text-align: left;
     }
 }
+
+/* Pantalla de acceso: más legible, IA primero y vista previa real */
+.auth-visual-copy {
+    max-width: 430px;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.auth-feature-list li {
+    font-size: 13.5px;
+}
+
+.auth-feature-list strong {
+    font-size: 14.5px;
+}
+
+.auth-art {
+    height: 230px;
+}
+
+.auth-art-card {
+    width: min(300px, calc(100% - 40px));
+    padding: 16px 18px;
+}
+
+.auth-art-card-head {
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.auth-art-card-head .auth-art-tag {
+    width: auto;
+    height: auto;
+    background: none;
+    border-radius: 0;
+    white-space: nowrap;
+    color: var(--auth-visual-muted);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.auth-art-ia {
+    padding: 3px 8px;
+    color: #0d2330;
+    background: #5eead4;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.auth-art-frontier {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.auth-art-metric {
+    justify-content: flex-start;
+    gap: 22px;
+}
+
+.auth-art-metric > span {
+    display: grid;
+    gap: 2px;
+    color: var(--auth-visual-text);
+    font-size: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+}
+
+.auth-art-metric small {
+    color: var(--auth-visual-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.auth-art-chip {
+    font-size: 11px;
+}
+
+.auth-art {
+    margin-top: 22px;
+}
+
+.auth-art-frontier {
+    height: 72px;
+}
+
+/* Las etiquetas quedan fuera de los datos de la tarjeta. */
+.auth-art-chip--top {
+    top: -4px;
+    left: 0;
+    right: auto;
+    color: #b9f7d8;
+}
+
+.auth-art-chip--bottom {
+    bottom: 4px;
+    left: auto;
+    right: 0;
+    color: #fde68a;
+}
+
+.auth-visual-foot {
+    font-size: 12px;
+}
+
+/* «Ver una demo»: segunda vía, clara pero sin competir con «Iniciar sesión». */
+.auth-demo {
+    display: grid;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.auth-demo[hidden] {
+    display: none;
+}
+
+.auth-demo-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.auth-demo-divider::before,
+.auth-demo-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+}
+
+.auth-demo-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 46px;
+    font-weight: 750;
+}
+
+.auth-demo-button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+.auth-demo-note {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+}
+
+/* En la pantalla de acceso, «Ver planes» es un enlace discreto. */
+body:not(.authenticated) .premium-link {
+    color: var(--primary-dark);
+    background: transparent;
+    border-color: var(--border);
+    box-shadow: none;
+}
+
+body:not(.authenticated) .premium-link:hover {
+    background: var(--surface-soft);
+    transform: none;
+}
+
+/* El logotipo tiene letras oscuras: en modo oscuro va sobre una pastilla clara. */
+body.dark .topbar .brand-wordmark {
+    padding: 5px 12px;
+    background: #f4f7f6;
+    border-radius: 12px;
+}
+
+/* Aviso de cuenta de demostración dentro de la app */
+.demo-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px 16px;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: var(--primary-soft);
+    border: 1px solid var(--primary-border);
+    border-radius: 14px;
+    font-size: 14px;
+}
+
+.demo-banner[hidden] {
+    display: none;
+}
+
+.demo-banner .primary-button {
+    width: auto;
+}

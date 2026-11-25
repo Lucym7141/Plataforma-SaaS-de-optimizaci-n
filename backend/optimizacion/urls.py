@@ -24,6 +24,7 @@ urlpatterns = [
     path("auth/delete/", views.eliminar_cuenta, name="eliminar_cuenta"),
     path("auth/change-password/", views.cambiar_contrasena, name="cambiar_contrasena"),
     path("auth/config/", views.configuracion_autenticacion, name="auth_config"),
+    path("auth/demo/", views.iniciar_demo, name="iniciar_demo"),
     path("planes/", views.listar_planes, name="listar_planes"),
     path("profile/", views.perfil_usuario, name="perfil_usuario"),
     path("profile/photo/", views.foto_perfil_usuario, name="foto_perfil_usuario"),
