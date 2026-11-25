@@ -25,11 +25,12 @@ test("auth screen exposes accessible tabs, labels, and password visibility", asy
     await page.goto("/");
     await expect(page.locator("#auth-panel")).toBeVisible();
     await expect(page.locator(".auth-visual")).toBeVisible();
-    await expect(page.locator(".auth-visual")).toContainText("Supuestos");
-    await expect(page.locator(".auth-visual")).toContainText("Datos ingresados por ti");
-    await expect(page.locator(".auth-visual")).not.toContainText("+18.2%");
-    await expect(page.locator(".auth-visual")).not.toContainText("12.4%");
-    await expect(page.locator(".auth-visual")).toContainText("HTTPS en producción");
+    await expect(page.locator(".auth-visual")).toContainText("Crea modelos conversando");
+    await expect(page.locator(".auth-visual")).toContainText("Modelo creado con IA");
+    await expect(page.locator(".auth-visual")).not.toContainText("FINANCIAL OPTIMIZATION");
+    await expect(page.locator(".auth-visual")).not.toContainText("HTTPS");
+    await expect(page.locator("#status-label")).toBeHidden();
+    await expect(page.locator("#demo-access")).toBeVisible();
     await expect(page.locator("#login-form")).toBeVisible();
     await expect(page.locator("#login-tab")).toHaveAttribute("aria-selected", "true");
     await expect(page.locator("#login-username")).toHaveAccessibleName("Usuario");
@@ -96,7 +97,8 @@ test("premium button opens the public informative plans in a new tab", async ({ 
 
     await page.goto("/");
     const premiumButton = page.locator("#premium-link");
-    await expect(premiumButton).toHaveText(/Hazte premium/i);
+    // En la pantalla de acceso el enlace es discreto; dentro de la app invita a mejorar.
+    await expect(premiumButton).toHaveText(/Ver planes/i);
     await expect(premiumButton).toHaveAttribute("target", "_blank");
     expect(await premiumButton.evaluate((element) =>
         element.compareDocumentPosition(
@@ -1624,4 +1626,30 @@ test("demo data loads solved example models and portfolio once", async ({ page }
     await expect(message).toContainText("ya estaban cargados", { timeout: 30_000 });
 
     await deleteDemoItems();
+});
+
+test("the demo opens a temporary account with solved examples", async ({ page }) => {
+    test.setTimeout(180_000);
+    await page.goto("/");
+    await expect(page.locator("#auth-panel")).toBeVisible();
+    await page.getByRole("button", { name: "Ver una demo sin registrarte" }).click();
+
+    await expect(page.locator("#app-content")).toBeVisible({ timeout: 20_000 });
+    await expect(page.locator("#demo-banner")).toBeVisible();
+    await expect(page.locator("#demo-banner")).toContainText("Estás explorando una demo");
+    await expect(page.locator("#premium-link")).toHaveText(/Hazte premium/i);
+    await expect(page.locator("#demo-data-message"))
+        .toContainText("Ejemplos listos", { timeout: 150_000 });
+    const me = await page.evaluate(async () =>
+        (await fetch("/api/auth/me/")).json());
+    expect(me.es_demo).toBe(true);
+    expect(me.username).toMatch(/^demo-/);
+    const portfolios = await page.evaluate(async () =>
+        (await fetch("/api/portafolios/")).json());
+    expect(portfolios.map((item) => item.nombre)).toContain("Ejemplo · Cartera balanceada");
+
+    await page.locator("#demo-signup-button").click();
+    await expect(page.locator("#auth-panel")).toBeVisible();
+    await expect(page.locator("#register-form")).toBeVisible();
+    await expect(page.locator("#demo-banner")).toBeHidden();
 });

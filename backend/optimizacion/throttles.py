@@ -83,6 +83,10 @@ class VerificacionRateThrottle(IPRateThrottle):
     scope = "verify"
 
 
+class DemoRateThrottle(IPRateThrottle):
+    scope = "demo"
+
+
 class ResolverRateThrottle(AtomicRateThrottle, UserRateThrottle):
     scope = "solve"
 

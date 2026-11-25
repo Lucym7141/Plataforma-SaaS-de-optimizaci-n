@@ -27,6 +27,9 @@ class PerfilUsuario(models.Model):
     # Exime a la cuenta de todos los límites del plan (cuentas de demostración
     # o de ventas). Solo se cambia desde el admin o `manage.py asignar_plan`.
     sin_limites = models.BooleanField(default=False)
+    # Cuenta temporal creada con «Ver una demo»; se borra pasado
+    # DEMO_ACCOUNT_TTL_HOURS y tiene menos consultas de IA.
+    es_demo = models.BooleanField(default=False)
     actualizado_en = models.DateTimeField(auto_now=True)
 
     def __str__(self):

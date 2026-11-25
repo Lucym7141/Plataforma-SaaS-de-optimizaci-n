@@ -20,7 +20,7 @@
         <div class="topbar-meta">
             <a id="premium-link" class="premium-link" href="/planes/" target="_blank" rel="opener">
                 <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m12 3 2.4 5.2 5.6.7-4.1 3.9 1.1 5.6L12 15.6l-5 2.8 1.1-5.6L4 8.9l5.6-.7L12 3Z"/><path d="M5 21h14"/></svg>
-                Hazte premium
+                <span id="premium-label">Ver planes</span>
             </a>
             <div class="notification-menu">
                 <button id="notification-toggle" class="header-icon-button notification-trigger" type="button" aria-expanded="false" aria-controls="notifications-panel" aria-label="Notificaciones">
@@ -52,7 +52,7 @@
                     <path d="M20.2 15.1A8.5 8.5 0 0 1 8.9 3.8 8.6 8.6 0 1 0 20.2 15.1Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
             </button>
-            <span id="status-label" class="status"><span class="status-dot"></span> Acceso seguro</span>
+            <span id="status-label" class="status" hidden></span>
         </div>
     </header>
 
@@ -61,47 +61,51 @@
             <aside class="auth-visual" aria-label="Presentación de Vértice">
                 <div class="auth-visual-glow" aria-hidden="true"></div>
                 <div class="auth-visual-content">
-                    <p class="auth-eyebrow"><span class="auth-eyebrow-dot" aria-hidden="true"></span> VÉRTICE · FINANCIAL OPTIMIZATION</p>
+                    <p class="auth-eyebrow"><span class="auth-eyebrow-dot" aria-hidden="true"></span> VÉRTICE · OPTIMIZACIÓN FINANCIERA CON IA</p>
                     <p class="auth-visual-title">Decisiones financieras con más perspectiva.</p>
-                    <p class="auth-visual-copy">Modela problemas de optimización y analiza tus portafolios en un espacio privado, claro y trazable.</p>
+                    <p class="auth-visual-copy">Describe tu problema con tus palabras: Vértice lo convierte en un modelo, lo resuelve y te explica el resultado.</p>
                     <ul class="auth-feature-list">
                         <li>
                             <span class="auth-feature-index" aria-hidden="true">01</span>
-                            <span><strong>Modelos comprensibles</strong>Formula, resuelve y revisa cada decisión.</span>
+                            <span><strong>Crea modelos conversando</strong>La IA arma variables, objetivo y restricciones a partir de tu descripción.</span>
                         </li>
                         <li>
                             <span class="auth-feature-index" aria-hidden="true">02</span>
-                            <span><strong>Análisis con contexto</strong>Compara riesgo, rendimiento y escenarios.</span>
+                            <span><strong>Más que inversiones</strong>Producción, transporte, presupuestos y portafolios en un solo lugar.</span>
                         </li>
                         <li>
                             <span class="auth-feature-index" aria-hidden="true">03</span>
-                            <span><strong>Control de tu cuenta</strong>Tus datos permanecen privados y exportables.</span>
+                            <span><strong>Resultados que se entienden</strong>Qué limita tu decisión, cuánto rinde y cuánto arriesga.</span>
                         </li>
                     </ul>
                 </div>
                 <div class="auth-art" aria-hidden="true">
                     <div class="auth-art-halo"></div>
-                    <div class="auth-art-orbit auth-art-orbit--outer"></div>
-                    <div class="auth-art-orbit auth-art-orbit--inner"></div>
                     <div class="auth-art-card">
-                        <div class="auth-art-card-head"><span></span><span></span><span></span></div>
-                        <div class="auth-art-chart">
-                            <span></span><span></span><span></span><span></span><span></span>
+                        <div class="auth-art-card-head">
+                            <span class="auth-art-tag">Frontera eficiente</span>
                         </div>
+                        <svg class="auth-art-frontier" viewBox="0 0 220 90" fill="none">
+                            <path d="M10 82 L10 78 C 40 50, 80 30, 210 14 L210 82 Z" fill="rgba(94, 234, 212, 0.16)"/>
+                            <path d="M10 78 C 40 50, 80 30, 210 14" stroke="#5eead4" stroke-width="3" stroke-linecap="round"/>
+                            <circle cx="22" cy="86" r="4" stroke="#f59e0b" stroke-width="2.5"/>
+                            <circle cx="196" cy="8" r="4" stroke="#f59e0b" stroke-width="2.5"/>
+                            <rect x="62" y="37" width="10" height="10" transform="rotate(45 67 42)" fill="#f2f7f6"/>
+                        </svg>
                         <div class="auth-art-metric">
-                            <span>Supuestos</span>
-                            <strong>Editables</strong>
+                            <span><small>Rendimiento</small><strong>6,96 %</strong></span>
+                            <span><small>Riesgo</small><strong>9,65 %</strong></span>
                         </div>
                     </div>
-                    <span class="auth-art-chip auth-art-chip--top">Modelos revisables</span>
-                    <span class="auth-art-chip auth-art-chip--bottom">Datos ingresados por ti</span>
+                    <span class="auth-art-chip auth-art-chip--top">✦ Modelo creado con IA</span>
+                    <span class="auth-art-chip auth-art-chip--bottom">Cartera diversificada · 3 activos</span>
                 </div>
-                <p class="auth-visual-foot"><span class="status-dot" aria-hidden="true"></span> Espacio privado por cuenta · HTTPS en producción</p>
+                <p class="auth-visual-foot"><span class="status-dot" aria-hidden="true"></span> En español · Plan inicial gratis</p>
             </aside>
 
             <div class="auth-card">
                 <div class="auth-card-heading">
-                    <p class="section-label">ACCESO SEGURO</p>
+                    <p class="section-label">BIENVENIDO</p>
                     <h1 id="auth-title">Inicia sesión</h1>
                     <p id="auth-subtitle" class="muted">Tus problemas y resultados solo estarán disponibles para tu cuenta.</p>
                 </div>
@@ -229,11 +233,20 @@
                     <button class="primary-button auth-submit" type="submit">Guardar contraseña nueva</button>
                 </form>
 
+                <div id="demo-access" class="auth-demo" hidden>
+                    <p class="auth-demo-divider"><span>o</span></p>
+                    <button id="demo-button" class="secondary-button auth-demo-button" type="button">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>
+                        <span data-demo-start-label>Ver una demo sin registrarte</span>
+                    </button>
+                    <p class="auth-demo-note">Cuenta temporal con ejemplos ya resueltos. Se borra en <span data-demo-ttl>24</span> horas.</p>
+                </div>
+
                 <p class="auth-security-note">
                     <span class="auth-security-icon" aria-hidden="true">
                         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 3 5 6v5.5c0 4.2 2.8 7.5 7 9.5 4.2-2 7-5.3 7-9.5V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
                     </span>
-                    Acceso protegido con sesión segura y verificación por correo.
+                    Tus datos son privados: solo tú los ves.
                 </p>
             </div>
         </section>
@@ -386,6 +399,10 @@
             </section>
         </section>
         <div class="app-main">
+            <div id="demo-banner" class="demo-banner" role="status" hidden>
+                <span><strong>Estás explorando una demo.</strong> Esta cuenta temporal y sus datos se borran en <span data-demo-ttl>24</span> horas.</span>
+                <button id="demo-signup-button" class="primary-button" type="button">Crear mi cuenta</button>
+            </div>
             <div class="app-mobile-toolbar">
                 <button id="sidebar-toggle" class="sidebar-toggle" type="button" aria-expanded="false" aria-controls="app-sidebar" aria-label="Abrir navegación">
                     <span aria-hidden="true">☰</span>
