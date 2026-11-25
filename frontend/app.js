@@ -859,34 +859,41 @@ function getVariableName(term, variables = []) {
     return variable?.nombre || `Variable ${term.variable}`;
 }
 
-function formatExpression(terms, variables = []) {
+// Nombres de variables con notación matemática: x_A1 → x con subíndice A1.
+function mathName(name) {
+    const text = String(name ?? "");
+    const match = text.match(/^([A-Za-z]{1,2})_([A-Za-z0-9]{1,8})$/);
+    if (match) {
+        return `<span class="math-var"><i>${escapeHTML(match[1])}</i><sub>${escapeHTML(match[2])}</sub></span>`;
+    }
+    if (/^[A-Za-z]{1,2}\d{0,3}$/.test(text)) {
+        return `<span class="math-var"><i>${escapeHTML(text)}</i></span>`;
+    }
+    return `<span class="math-var">${escapeHTML(text)}</span>`;
+}
+
+// «horas_trabajo» → «Horas trabajo» para títulos legibles.
+function humanizeName(name) {
+    const text = String(name ?? "").replace(/_/g, " ").trim();
+    return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+function formatExpressionHTML(terms, variables = []) {
     const visible = (terms || []).filter((term) => {
         const coefficient = Number(term.coeficiente);
         return !Number.isFinite(coefficient) || coefficient !== 0;
     });
-    if (visible.length === 0) {
-        return "0";
-    }
-
+    if (!visible.length) return "0";
     return visible.map((term, index) => {
         const coefficient = Number(term.coeficiente);
-        const variableName = getVariableName(term, variables);
-
+        const name = mathName(getVariableName(term, variables));
         if (!Number.isFinite(coefficient)) {
-            return `${term.coeficiente} · ${variableName}`;
+            return `${escapeHTML(term.coeficiente)} · ${name}`;
         }
-
-        const sign = coefficient < 0 ? "−" : "+";
-        const absoluteValue = Math.abs(coefficient);
-        const part = absoluteValue === 1
-            ? variableName
-            : `${formatNumber(absoluteValue)} · ${variableName}`;
-
-        if (index === 0) {
-            return coefficient < 0 ? `−${part}` : part;
-        }
-
-        return `${sign} ${part}`;
+        const absolute = Math.abs(coefficient);
+        const part = absolute === 1 ? name : `${escapeHTML(formatNumber(absolute))} · ${name}`;
+        if (index === 0) return coefficient < 0 ? `−${part}` : part;
+        return `${coefficient < 0 ? "−" : "+"} ${part}`;
     }).join(" ");
 }
 
@@ -2941,62 +2948,108 @@ function renderProblem(problem) {
     document.getElementById("problem-description").textContent =
         problem.descripcion || "Este problema no tiene una descripción.";
 
+    const boundsText = (variable) => {
+        const lower = variable.limite_inferior;
+        const upper = variable.limite_superior;
+        const hasLower = lower !== null && lower !== undefined;
+        const hasUpper = upper !== null && upper !== undefined;
+        if (variable.tipo === "BIN") return "0 o 1";
+        if (hasLower && hasUpper) return `entre ${formatNumber(lower)} y ${formatNumber(upper)}`;
+        if (hasLower) return `≥ ${formatNumber(lower)}`;
+        if (hasUpper) return `≤ ${formatNumber(upper)}`;
+        return "sin límites";
+    };
+    const describeVariable = (variable) =>
+        `${getVariableType(variable.tipo)} · ${boundsText(variable)}`;
+    const shared = variables.length > 1 &&
+        variables.every((variable) => describeVariable(variable) === describeVariable(variables[0]));
+
     document.getElementById("variables-list").innerHTML =
         variables.length > 0
-            ? variables.map((variable) => {
-                const bounds = [];
-
-                if (variable.limite_inferior !== null &&
-                    variable.limite_inferior !== undefined) {
-                    bounds.push(`Mín. ${formatNumber(variable.limite_inferior)}`);
-                }
-
-                if (variable.limite_superior !== null &&
-                    variable.limite_superior !== undefined) {
-                    bounds.push(`Máx. ${formatNumber(variable.limite_superior)}`);
-                }
-
-                return `
-                    <div class="variable-card">
-                        <span class="variable-name">${escapeHTML(variable.nombre)}</span>
-                        <span class="variable-meta">
-                            ${escapeHTML(getVariableType(variable.tipo))}
-                        </span>
-                        <span class="variable-meta">
-                            ${escapeHTML(bounds.length ? bounds.join(" · ") : "Sin límites indicados")}
-                        </span>
-                    </div>
-                `;
-            }).join("")
+            ? `
+                ${shared ? `<p class="variables-summary">${escapeHTML(summarizeVariables(variables, boundsText))}</p>` : ""}
+                <ul class="variable-rows">
+                    ${variables.map((variable) => {
+                        const label = variable.descripcion?.trim() ||
+                            humanizeName(variable.nombre);
+                        return `
+                            <li class="variable-row">
+                                <span class="variable-symbol">${mathName(variable.nombre)}</span>
+                                <span class="variable-text">
+                                    <span class="variable-label">${escapeHTML(label)}</span>
+                                    ${variable.unidad ? `<span class="variable-unit">${escapeHTML(variable.unidad)}</span>` : ""}
+                                </span>
+                                ${shared ? "" : `<span class="variable-meta">${escapeHTML(describeVariable(variable))}</span>`}
+                            </li>`;
+                    }).join("")}
+                </ul>`
             : '<p class="muted">Este modelo no tiene variables registradas.</p>';
 
     const objectivePrefix = getObjectiveLabel(problem.tipo_objetivo);
 
-    document.getElementById("objective-formula").textContent =
-        `${objectivePrefix} Z = ${formatExpression(objectiveTerms, variables)}`;
+    document.getElementById("objective-formula").innerHTML =
+        `${escapeHTML(objectivePrefix)} <i>Z</i> = ${formatExpressionHTML(objectiveTerms, variables)}`;
 
     document.getElementById("constraints-list").innerHTML =
         constraints.length > 0
             ? constraints.map((constraint, index) => {
-                const expression = formatExpression(
-                    constraint.terminos || [],
-                    variables
-                );
-
+                const name = constraint.nombre || `Restricción ${index + 1}`;
+                const description = constraint.descripcion?.trim();
                 return `
-                    <div class="constraint-row">
-                        <span class="constraint-name">
-                            ${escapeHTML((constraint.nombre || `Restricción ${index + 1}`).replace(/_/g, " "))}
+                    <div class="constraint-row" data-constraint-name="${escapeHTML(name)}">
+                        <span class="constraint-text">
+                            <span class="constraint-title">${escapeHTML(description || humanizeName(name))}</span>
+                            ${description ? `<span class="constraint-name">${escapeHTML(humanizeName(name))}</span>` : ""}
                         </span>
                         <span class="constraint-formula">
-                            ${escapeHTML(expression)}
+                            ${formatExpressionHTML(constraint.terminos || [], variables)}
                             ${escapeHTML(getOperator(constraint.operador))}
                             ${escapeHTML(formatNumber(constraint.lado_derecho))}
                         </span>
+                        <span class="constraint-status" data-constraint-status hidden></span>
                     </div>
                 `;
             }).join("")
             : '<p class="muted">Este modelo no tiene restricciones registradas.</p>';
+}
+
+// «4 variables continuas · todas ≥ 0» cuando todas comparten tipo y límites.
+function summarizeVariables(variables, boundsText) {
+    const plural = { CONT: "continuas", ENT: "enteras", BIN: "binarias" };
+    const type = plural[variables[0].tipo] || getVariableType(variables[0].tipo).toLowerCase();
+    const bounds = boundsText(variables[0]);
+    if (variables[0].tipo === "BIN") return `${variables.length} variables binarias (0 o 1)`;
+    return bounds === "sin límites"
+        ? `${variables.length} variables ${type} · sin límites`
+        : `${variables.length} variables ${type} · todas ${bounds}`;
+}
+
+// Marca en el modelo qué restricciones limitan el resultado y cuánta
+// holgura dejan las demás, a partir del análisis del solucionador.
+function markConstraintAnalysis(result) {
+    const rows = document.querySelectorAll("#constraints-list [data-constraint-name]");
+    const analysis = new Map(
+        (result?.detalles?.restricciones_analisis || []).map((item) => [item.nombre, item])
+    );
+    rows.forEach((row) => {
+        const status = row.querySelector("[data-constraint-status]");
+        const item = analysis.get(row.dataset.constraintName);
+        row.classList.toggle("is-binding", Boolean(item?.activa));
+        if (!item || result?.estado !== "OPT") {
+            status.hidden = true;
+            status.textContent = "";
+            return;
+        }
+        status.hidden = false;
+        const slack = formatMetric(Math.abs(Number(item.holgura)), 4);
+        status.textContent = item.activa
+            ? "Limita el resultado"
+            : item.operador === "GE"
+                ? `Supera el mínimo en ${slack}`
+                : item.operador === "LE"
+                    ? `Sobran ${slack}`
+                    : `Diferencia de ${slack}`;
+    });
 }
 
 function showError(message) {
@@ -3027,6 +3080,7 @@ async function solveProblem() {
     solveButton.textContent = "Resolviendo...";
     errorMessage.hidden = true;
     resultsSection.hidden = true;
+    markConstraintAnalysis(null);
     lastProblemExecutionId = null;
     document.querySelector('[data-report-message="problem"]').hidden = true;
 
@@ -3058,6 +3112,7 @@ function renderProblemResult(result) {
     const isOptimal = status === "OPT";
     lastProblemExecutionId = result.id;
     resetExplanation("problem", result);
+    markConstraintAnalysis(result);
 
     document.getElementById("result-status").textContent =
         getStatusLabel(status);
