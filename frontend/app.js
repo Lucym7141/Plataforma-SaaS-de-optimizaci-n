@@ -1347,6 +1347,20 @@ function formatPercent(fraction, digits = 2) {
     }).format(number * 100)} %`;
 }
 
+// Decimales según la magnitud: los resultados grandes se muestran a 2 decimales
+// y los pequeños a 4, para no arrastrar el ruido numérico del solucionador.
+function smartNumber(value) {
+    const number = Number(value);
+    if (value === null || value === undefined || value === "" || !Number.isFinite(number)) {
+        return "—";
+    }
+    const absolute = Math.abs(number);
+    const digits = absolute >= 100 ? 2 : absolute >= 1 ? 4 : 6;
+    const rounded = Number(number.toFixed(digits));
+    return new Intl.NumberFormat("es-CO", { maximumFractionDigits: digits })
+        .format(Object.is(rounded, -0) ? 0 : rounded);
+}
+
 function formatMetric(value, digits = 4) {
     const number = Number(value);
     if (value === null || value === undefined || !Number.isFinite(number)) return "—";
@@ -1375,7 +1389,7 @@ function problemSolutionChips(item, limit = 4) {
     const values = item.valores || [];
     if (!values.length) return '<span class="muted">Sin valores</span>';
     const chips = values.slice(0, limit).map((value) =>
-        `<span class="history-chip">${escapeHTML(value.variable_nombre || `Variable ${value.variable}`)} <strong>${escapeHTML(formatMetric(value.valor))}</strong></span>`);
+        `<span class="history-chip">${escapeHTML(value.variable_nombre || `Variable ${value.variable}`)} <strong>${escapeHTML(smartNumber(value.valor))}</strong></span>`);
     if (values.length > limit) {
         chips.push(`<span class="history-chip history-chip-more">+${values.length - limit}</span>`);
     }
@@ -1413,7 +1427,7 @@ function showHistory(items, target, portfolio = false) {
         return `<tr${hidden}>
             <td data-label="Fecha">${escapeHTML(date)}</td>
             <td data-label="Estado"><span class="history-status ${ok ? "is-ok" : "is-bad"}">${escapeHTML(getStatusLabel(item.estado))}</span></td>
-            <td data-label="Valor objetivo" class="numeric">${escapeHTML(formatMetric(item.valor_objetivo))}</td>
+            <td data-label="Valor objetivo" class="numeric">${escapeHTML(smartNumber(item.valor_objetivo))}</td>
             <td data-label="Solución"><div class="history-chips">${problemSolutionChips(item)}</div></td>
         </tr>`;
     }).join("");
@@ -3051,14 +3065,21 @@ function markConstraintAnalysis(result) {
             return;
         }
         status.hidden = false;
-        const slack = formatMetric(Math.abs(Number(item.holgura)), 4);
+        const slack = smartNumber(Math.abs(Number(item.holgura)));
+        const used = smartNumber(item.lado_izquierdo);
+        const bound = smartNumber(item.lado_derecho);
+        const usage = item.operador === "GE"
+            ? `${used} (mínimo ${bound})`
+            : item.operador === "LE"
+                ? `${used} de ${bound}`
+                : `${used} (= ${bound})`;
         status.textContent = item.activa
-            ? "Limita el resultado"
+            ? `Limita el resultado · ${usage}`
             : item.operador === "GE"
-                ? `Supera el mínimo en ${slack}`
+                ? `${usage} · supera el mínimo en ${slack}`
                 : item.operador === "LE"
-                    ? `Sobran ${slack}`
-                    : `Diferencia de ${slack}`;
+                    ? `${usage} · sobran ${slack}`
+                    : `${usage} · diferencia de ${slack}`;
     });
 }
 
@@ -3136,7 +3157,7 @@ function renderProblemResult(result) {
         result.valor_objetivo === null ||
         result.valor_objetivo === undefined
             ? "No disponible"
-            : formatNumber(result.valor_objetivo);
+            : smartNumber(result.valor_objetivo);
 
     const values = result.valores || [];
 
@@ -3145,7 +3166,7 @@ function renderProblemResult(result) {
             ? values.map((item) => `
                 <div class="solution-card">
                     <span>${escapeHTML(item.variable_nombre || `Variable ${item.variable}`)}</span>
-                    <strong>${escapeHTML(formatNumber(item.valor))}</strong>
+                    <strong>${escapeHTML(smartNumber(item.valor))}</strong>
                 </div>
             `).join("")
             : '<p class="muted">No hay valores de solución disponibles.</p>';

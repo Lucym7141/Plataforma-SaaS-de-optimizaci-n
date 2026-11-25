@@ -1163,6 +1163,14 @@ test("user can load and create a model from the template library", async ({ page
     expect(allocations.x4).toBeCloseTo(8 / 3, 5);
     expect(allocations.x5).toBeCloseTo(16 / 3, 5);
     await expect(page.locator("#result-status")).toHaveText("Óptimo");
+    // Descripciones con tildes, objetivo a 2 decimales y uso de cada restricción.
+    expect(createdPortfolioModel.restricciones[1].descripcion)
+        .toBe("Mínimo 2 millones en Bonos del Tesoro");
+    const constraintsList = page.locator("#constraints-list");
+    await expect(constraintsList).toContainText("Mínimo 2 millones en Bonos del Tesoro");
+    await expect(page.locator("#result-objective")).toHaveText("953.333,33");
+    await expect(constraintsList.locator('[data-constraint-name="riesgo_ponderado_maximo"]'))
+        .toContainText("Limita el resultado · 42 de 42");
 
     page.once("dialog", (dialog) => dialog.accept());
     const portfolioDeletePromise = page.waitForResponse((response) =>

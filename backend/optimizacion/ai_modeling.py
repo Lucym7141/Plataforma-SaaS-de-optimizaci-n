@@ -50,7 +50,10 @@ objeto JSON válido, sin Markdown, con esta estructura:
   }]
 }
 Todos los coeficientes, límites y lados derechos deben ser números o cadenas
-numéricas finitas. Usa un término objetivo y, en cada restricción, un término
+numéricas finitas. Escribe la descripción de cada variable y de cada restricción
+como una frase corta en español natural, con tildes (por ejemplo «Máximo 1,5
+millones en acciones tecnológicas»); se muestra como título en la app.
+Usa un término objetivo y, en cada restricción, un término
 para cada variable. No inventes datos que no aparezcan en la descripción:
 cuando falte un valor indispensable usa 0 y deja el supuesto claramente
 indicado en la descripción para que la persona lo revise. Los nombres de
