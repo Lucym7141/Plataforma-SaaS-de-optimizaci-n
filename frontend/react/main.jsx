@@ -74,6 +74,7 @@ function emptyVariable(index) {
 function emptyConstraint(index, variableCount) {
     return {
         nombre: `restriccion_${index + 1}`,
+        descripcion: "",
         operador: "LE",
         lado_derecho: "0",
         coeficientes: Array(variableCount).fill("0")
@@ -109,8 +110,8 @@ const optimizationTemplates = [
             }
         ],
         constraints: [
-            { nombre: "presupuesto_total", operador: "EQ", lado_derecho: "1", coeficientes: ["1", "1"] },
-            { nombre: "tope_acciones", operador: "LE", lado_derecho: "0.6", coeficientes: ["0", "1"] }
+            { nombre: "presupuesto_total", descripcion: "Todo el capital se asigna", operador: "EQ", lado_derecho: "1", coeficientes: ["1", "1"] },
+            { nombre: "tope_acciones", descripcion: "Máximo 60 % en acciones", operador: "LE", lado_derecho: "0.6", coeficientes: ["0", "1"] }
         ]
     },
     {
@@ -128,11 +129,11 @@ const optimizationTemplates = [
             { nombre: "x5", descripcion: "Fondos energéticos", unidad: "millones de USD", tipo: "CONT", limite_inferior: "0", limite_superior: "", coeficiente_objetivo: "120000" }
         ],
         constraints: [
-            { nombre: "presupuesto_total", operador: "EQ", lado_derecho: "10", coeficientes: ["1", "1", "1", "1", "1"] },
-            { nombre: "minimo_bonos_tesoro", operador: "GE", lado_derecho: "2", coeficientes: ["1", "0", "0", "0", "0"] },
-            { nombre: "tope_acciones_tecnologicas", operador: "LE", lado_derecho: "1.5", coeficientes: ["0", "1", "0", "0", "0"] },
-            { nombre: "minimo_bienes_raices_energia", operador: "GE", lado_derecho: "3", coeficientes: ["0", "0", "1", "0", "1"] },
-            { nombre: "riesgo_ponderado_maximo", operador: "LE", lado_derecho: "42", coeficientes: ["1", "8", "4", "3", "6"] }
+            { nombre: "presupuesto_total", descripcion: "Presupuesto total de 10 millones de USD", operador: "EQ", lado_derecho: "10", coeficientes: ["1", "1", "1", "1", "1"] },
+            { nombre: "minimo_bonos_tesoro", descripcion: "Mínimo 2 millones en Bonos del Tesoro", operador: "GE", lado_derecho: "2", coeficientes: ["1", "0", "0", "0", "0"] },
+            { nombre: "tope_acciones_tecnologicas", descripcion: "Máximo 1,5 millones en acciones tecnológicas", operador: "LE", lado_derecho: "1.5", coeficientes: ["0", "1", "0", "0", "0"] },
+            { nombre: "minimo_bienes_raices_energia", descripcion: "Mínimo 3 millones entre bienes raíces y energía", operador: "GE", lado_derecho: "3", coeficientes: ["0", "0", "1", "0", "1"] },
+            { nombre: "riesgo_ponderado_maximo", descripcion: "Riesgo ponderado máximo de 4,2 (42 sobre 10 millones)", operador: "LE", lado_derecho: "42", coeficientes: ["1", "8", "4", "3", "6"] }
         ]
     },
     {
@@ -149,10 +150,10 @@ const optimizationTemplates = [
             { nombre: "planta_b_destino_2", descripcion: "Envío de planta B a destino 2", unidad: "unidades", tipo: "CONT", limite_inferior: "0", limite_superior: "", coeficiente_objetivo: "3" }
         ],
         constraints: [
-            { nombre: "oferta_planta_a", operador: "LE", lado_derecho: "100", coeficientes: ["1", "1", "0", "0"] },
-            { nombre: "oferta_planta_b", operador: "LE", lado_derecho: "80", coeficientes: ["0", "0", "1", "1"] },
-            { nombre: "demanda_destino_1", operador: "GE", lado_derecho: "70", coeficientes: ["1", "0", "1", "0"] },
-            { nombre: "demanda_destino_2", operador: "GE", lado_derecho: "60", coeficientes: ["0", "1", "0", "1"] }
+            { nombre: "oferta_planta_a", descripcion: "Capacidad de la planta A", operador: "LE", lado_derecho: "100", coeficientes: ["1", "1", "0", "0"] },
+            { nombre: "oferta_planta_b", descripcion: "Capacidad de la planta B", operador: "LE", lado_derecho: "80", coeficientes: ["0", "0", "1", "1"] },
+            { nombre: "demanda_destino_1", descripcion: "Demanda del destino 1", operador: "GE", lado_derecho: "70", coeficientes: ["1", "0", "1", "0"] },
+            { nombre: "demanda_destino_2", descripcion: "Demanda del destino 2", operador: "GE", lado_derecho: "60", coeficientes: ["0", "1", "0", "1"] }
         ]
     },
     {
@@ -167,8 +168,8 @@ const optimizationTemplates = [
             { nombre: "cereal", descripcion: "Porciones de cereal", unidad: "porciones", tipo: "CONT", limite_inferior: "0", limite_superior: "", coeficiente_objetivo: "0.8" }
         ],
         constraints: [
-            { nombre: "proteina_minima", operador: "GE", lado_derecho: "40", coeficientes: ["8", "2"] },
-            { nombre: "energia_minima", operador: "GE", lado_derecho: "60", coeficientes: ["3", "10"] }
+            { nombre: "proteina_minima", descripcion: "Proteína mínima diaria", operador: "GE", lado_derecho: "40", coeficientes: ["8", "2"] },
+            { nombre: "energia_minima", descripcion: "Energía mínima diaria", operador: "GE", lado_derecho: "60", coeficientes: ["3", "10"] }
         ]
     },
     {
@@ -183,8 +184,8 @@ const optimizationTemplates = [
             { nombre: "producto_b", descripcion: "Unidades producidas del producto B", unidad: "unidades", tipo: "ENT", limite_inferior: "0", limite_superior: "", coeficiente_objetivo: "45" }
         ],
         constraints: [
-            { nombre: "horas_trabajo", operador: "LE", lado_derecho: "100", coeficientes: ["2", "4"] },
-            { nombre: "materia_prima", operador: "LE", lado_derecho: "80", coeficientes: ["3", "2"] }
+            { nombre: "horas_trabajo", descripcion: "Horas de trabajo disponibles", operador: "LE", lado_derecho: "100", coeficientes: ["2", "4"] },
+            { nombre: "materia_prima", descripcion: "Materia prima disponible", operador: "LE", lado_derecho: "80", coeficientes: ["3", "2"] }
         ]
     }
 ];
@@ -281,6 +282,7 @@ function ProblemAuthor() {
             );
             return {
                 nombre: constraint.nombre,
+                descripcion: constraint.descripcion || "",
                 operador: constraint.operador,
                 lado_derecho: String(constraint.lado_derecho),
                 coeficientes: nextVariables.map((variable) =>
@@ -401,6 +403,7 @@ function ProblemAuthor() {
                     );
                     return {
                         nombre: constraint.nombre,
+                        descripcion: constraint.descripcion || "",
                         operador: constraint.operador,
                         lado_derecho: String(constraint.lado_derecho),
                         coeficientes: nextVariables.map((variable) =>
@@ -512,6 +515,7 @@ function ProblemAuthor() {
         })),
         restricciones: constraints.map((constraint) => ({
             nombre: constraint.nombre.trim(),
+            descripcion: (constraint.descripcion || "").trim(),
             operador: constraint.operador,
             lado_derecho: constraint.lado_derecho,
             terminos: variables.map((variable, index) => ({
@@ -929,6 +933,17 @@ function ProblemAuthor() {
                                         )}
                                         maxLength={150}
                                         required
+                                    />
+                                </label>
+                                <label className="problem-author-variable-description">
+                                    Descripción (opcional, se muestra como título)
+                                    <input
+                                        value={constraint.descripcion || ""}
+                                        onChange={(event) => updateConstraint(
+                                            constraintIndex, "descripcion", event.target.value
+                                        )}
+                                        maxLength={300}
+                                        placeholder="Ej.: Máximo 1,5 millones en acciones tecnológicas"
                                     />
                                 </label>
                                 <label>
