@@ -6149,3 +6149,172 @@ body.dark .history-status.is-bad {
         font-size: 22px;
     }
 }
+
+/* Vista del modelo: variables con significado, notación matemática y
+   restricciones que dicen qué limita el resultado. */
+.variable-list-wrap {
+    display: grid;
+    gap: 10px;
+}
+
+.variables-summary {
+    justify-self: start;
+    margin: 0;
+    padding: 4px 12px;
+    color: var(--muted);
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.variable-rows {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.variable-row {
+    display: grid;
+    grid-template-columns: 84px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 14px;
+}
+
+.variable-row + .variable-row {
+    border-top: 1px solid var(--border);
+}
+
+.variable-symbol {
+    font-size: 18px;
+    color: var(--primary-dark);
+}
+
+.variable-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.variable-label {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.variable-unit {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.variable-row .variable-meta {
+    margin: 0;
+    white-space: nowrap;
+}
+
+.math-var i {
+    font-family: "Cambria Math", Cambria, "Times New Roman", serif;
+    font-style: italic;
+    font-weight: 600;
+    font-size: 1.12em;
+}
+
+.math-var sub {
+    font-size: 0.7em;
+    font-weight: 700;
+    vertical-align: -0.3em;
+    line-height: 0;
+}
+
+.formula {
+    font-size: 18px;
+}
+
+.constraints-list .constraint-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 16px;
+    padding: 13px 15px;
+}
+
+.constraint-text {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.constraint-title {
+    font-weight: 700;
+}
+
+.constraint-row .constraint-name {
+    font-size: 12px;
+}
+
+.constraint-row .constraint-formula {
+    font-size: 17px;
+}
+
+.constraint-status {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    gap: 7px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.constraint-status[hidden] {
+    display: none;
+}
+
+.constraint-status::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+}
+
+.constraint-row.is-binding {
+    border-color: #f59e0b;
+    box-shadow: inset 4px 0 0 #f59e0b;
+}
+
+.constraint-row.is-binding .constraint-status {
+    color: #b45309;
+}
+
+.constraint-row.is-binding .constraint-status::before {
+    background: #f59e0b;
+}
+
+body.dark .constraint-row.is-binding .constraint-status {
+    color: #fcd34d;
+}
+
+@media (max-width: 640px) {
+    .variable-row {
+        grid-template-columns: 64px minmax(0, 1fr);
+    }
+
+    .variable-row .variable-meta {
+        grid-column: 2;
+        white-space: normal;
+    }
+
+    .constraints-list .constraint-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .constraint-row .constraint-formula {
+        text-align: left;
+    }
+}

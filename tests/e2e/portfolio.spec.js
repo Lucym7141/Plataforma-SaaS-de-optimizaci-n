@@ -1021,7 +1021,7 @@ test("user can create a complete optimization model from the React workspace", a
     await expect(page.locator("#objective-formula")).toContainText(
         "3 · x + 5 · y"
     );
-    await expect(page.locator("#constraints-list")).toContainText("capacidad");
+    await expect(page.locator("#constraints-list")).toContainText("Capacidad");
     await expect(page.locator("#kpi-problemas")).toHaveText("2");
 
     await page.locator("#edit-problem-button").click();
