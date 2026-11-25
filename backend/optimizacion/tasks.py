@@ -41,6 +41,55 @@ def _portfolio_solver_inputs(snapshot):
     }
 
 
+# Supuestos que definen la frontera: si cambian, la última optimización ya no
+# corresponde a esta curva y no se marca en el gráfico.
+FRONTIER_INPUT_KEYS = (
+    "activos",
+    "rendimientos_esperados",
+    "covarianza",
+    "pesos_minimos",
+    "pesos_maximos",
+    "categorias",
+    "limites_categoria",
+)
+
+
+def _asset_references(snapshot):
+    """Riesgo y rendimiento de cada activo por separado (puntos de referencia)."""
+    return [
+        {
+            "nombre": name,
+            "rendimiento": float(expected),
+            "volatilidad": max(float(snapshot["covarianza"][index][index]), 0.0) ** 0.5,
+        }
+        for index, (name, expected) in enumerate(
+            zip(snapshot["activos"], snapshot["rendimientos_esperados"], strict=False)
+        )
+    ]
+
+
+def _latest_optimum(portfolio, snapshot):
+    """La última cartera óptima calculada con los mismos supuestos, si existe."""
+    if portfolio is None:
+        return None
+    execution = (
+        EjecucionPortafolio.objects.filter(optimizacion=portfolio)
+        .order_by("-creada_en", "-id")
+        .first()
+    )
+    if execution is None:
+        return None
+    previous = execution.modelo_snapshot or {}
+    if any(previous.get(key) != snapshot.get(key) for key in FRONTIER_INPUT_KEYS):
+        return None
+    return {
+        "rendimientos_portafolio": float(execution.rendimientos_portafolio),
+        "volatilidad_portafolio": float(execution.volatilidad_portafolio),
+        "ponderaciones": [float(weight) for weight in execution.ponderaciones],
+        "aversion_riesgo": previous.get("aversion_riesgo"),
+    }
+
+
 def _run_job(job):
     if job.job_type == OptimizationJob.Type.PROBLEM:
         execution = resolver_problema(job.problem_id)
@@ -80,7 +129,13 @@ def _run_job(job):
             ],
             **_portfolio_solver_inputs(snapshot),
         )
-        return {"activos": snapshot["activos"], "puntos": points}
+        return {
+            "activos": snapshot["activos"],
+            "puntos": points,
+            "periodos_por_anio": snapshot.get("periodos_por_anio", 1),
+            "referencias_activos": _asset_references(snapshot),
+            "cartera_optima": _latest_optimum(job.portfolio, snapshot),
+        }
 
     raise ValueError("Tipo de trabajo de optimización desconocido.")
 
