@@ -381,51 +381,193 @@ document.querySelectorAll("[data-report-format]").forEach((button) => {
     ));
 });
 
+// Frontera eficiente interactiva: cada punto es una cartera; al pasar el
+// cursor, tocar o mover el control se muestra su riesgo, su rendimiento y
+// cómo se reparte. Los activos solos y la cartera óptima sirven de referencia.
+function niceTicks(min, max, count = 5) {
+    const span = max - min || 1;
+    const rough = span / count;
+    const magnitude = 10 ** Math.floor(Math.log10(rough));
+    const step = [1, 2, 2.5, 5, 10].map((factor) => factor * magnitude)
+        .find((candidate) => span / candidate <= count) || 10 * magnitude;
+    const ticks = [];
+    for (let value = Math.ceil(min / step) * step; value <= max + step * 1e-9; value += step) {
+        ticks.push(Number(value.toFixed(10)));
+    }
+    return ticks;
+}
+
 function renderFrontier(result) {
-    const points = result.puntos || [];
-    if (!points.length) {
+    const rawPoints = result.puntos || [];
+    if (!rawPoints.length) {
         throw new Error("No se recibieron puntos para la frontera eficiente.");
     }
-    const width = 700;
-    const height = 360;
-    const padding = { left: 72, right: 24, top: 24, bottom: 58 };
-    const xValues = points.map((point) => Number(point.volatilidad_portafolio));
-    const yValues = points.map((point) => Number(point.rendimientos_portafolio));
-    const xMin = Math.min(...xValues);
-    const xMax = Math.max(...xValues);
-    const yMin = Math.min(...yValues);
-    const yMax = Math.max(...yValues);
-    const xSpan = xMax - xMin || 1;
-    const ySpan = yMax - yMin || 1;
-    const x = (value) => padding.left +
-        ((value - xMin) / xSpan) * (width - padding.left - padding.right);
-    const y = (value) => height - padding.bottom -
-        ((value - yMin) / ySpan) * (height - padding.top - padding.bottom);
-    const coordinates = points.map((point) =>
-        `${x(Number(point.volatilidad_portafolio))},${y(Number(point.rendimientos_portafolio))}`
-    ).join(" ");
-    const circles = points.map((point) => `
-        <circle cx="${x(Number(point.volatilidad_portafolio))}"
-            cy="${y(Number(point.rendimientos_portafolio))}" r="4">
-            <title>Volatilidad ${escapeHTML(formatNumber(point.volatilidad_portafolio))};
-                rendimiento ${escapeHTML(formatNumber(point.rendimientos_portafolio))}</title>
-        </circle>`).join("");
-    document.getElementById("frontier-chart").innerHTML = `
-        <svg class="frontier-svg" viewBox="0 0 ${width} ${height}" role="img"
-            aria-label="Frontera eficiente: volatilidad frente a rendimiento">
-            <line class="chart-axis" x1="${padding.left}" y1="${height - padding.bottom}"
-                x2="${width - padding.right}" y2="${height - padding.bottom}"></line>
-            <line class="chart-axis" x1="${padding.left}" y1="${padding.top}"
-                x2="${padding.left}" y2="${height - padding.bottom}"></line>
-            <polyline class="frontier-line" points="${coordinates}"></polyline>
-            ${circles}
-            <text class="chart-label" x="${width / 2}" y="${height - 12}" text-anchor="middle">Volatilidad (desviación estándar)</text>
-            <text class="chart-label" transform="translate(18 ${height / 2}) rotate(-90)" text-anchor="middle">Rendimiento esperado</text>
-            <text class="chart-tick" x="${padding.left}" y="${height - padding.bottom + 20}">${escapeHTML(formatNumber(xMin))}</text>
-            <text class="chart-tick" x="${width - padding.right}" y="${height - padding.bottom + 20}" text-anchor="end">${escapeHTML(formatNumber(xMax))}</text>
-            <text class="chart-tick" x="${padding.left - 8}" y="${height - padding.bottom}" text-anchor="end">${escapeHTML(formatNumber(yMin))}</text>
-            <text class="chart-tick" x="${padding.left - 8}" y="${padding.top + 4}" text-anchor="end">${escapeHTML(formatNumber(yMax))}</text>
-        </svg>`;
+    const periods = Number(result.periodos_por_anio) || 1;
+    const annualReturn = (value) => Number(value) * periods;
+    const annualRisk = (value) => Number(value) * Math.sqrt(periods);
+    const names = result.activos || [];
+    const points = rawPoints.map((point) => ({
+        risk: annualRisk(point.volatilidad_portafolio),
+        ret: annualReturn(point.rendimientos_portafolio),
+        weights: (point.ponderaciones || []).map(Number)
+    }));
+    const references = (result.referencias_activos || []).map((asset) => ({
+        name: asset.nombre,
+        risk: annualRisk(asset.volatilidad),
+        ret: annualReturn(asset.rendimiento)
+    }));
+    const optimum = result.cartera_optima
+        ? {
+            risk: annualRisk(result.cartera_optima.volatilidad_portafolio),
+            ret: annualReturn(result.cartera_optima.rendimientos_portafolio),
+            weights: (result.cartera_optima.ponderaciones || []).map(Number)
+        }
+        : null;
+
+    const all = [...points, ...references, ...(optimum ? [optimum] : [])];
+    const width = 820;
+    const height = 440;
+    const pad = { left: 76, right: 28, top: 24, bottom: 64 };
+    const riskMax = Math.max(...all.map((item) => item.risk)) * 1.08;
+    const retValues = all.map((item) => item.ret);
+    const retSpan = Math.max(...retValues) - Math.min(...retValues) || 0.01;
+    const retMin = Math.min(0, Math.min(...retValues) - retSpan * 0.08);
+    const retMax = Math.max(...retValues) + retSpan * 0.12;
+    const x = (value) => pad.left + (value / riskMax) * (width - pad.left - pad.right);
+    const y = (value) => height - pad.bottom -
+        ((value - retMin) / (retMax - retMin)) * (height - pad.top - pad.bottom);
+    const percent = (value) => formatPercent(value, 1);
+
+    const xTicks = niceTicks(0, riskMax);
+    const yTicks = niceTicks(retMin, retMax);
+    const grid = [
+        ...xTicks.map((tick) => `
+            <line class="frontier-grid" x1="${x(tick)}" y1="${pad.top}" x2="${x(tick)}" y2="${height - pad.bottom}"></line>
+            <text class="chart-tick" x="${x(tick)}" y="${height - pad.bottom + 22}" text-anchor="middle">${escapeHTML(percent(tick))}</text>`),
+        ...yTicks.map((tick) => `
+            <line class="frontier-grid" x1="${pad.left}" y1="${y(tick)}" x2="${width - pad.right}" y2="${y(tick)}"></line>
+            <text class="chart-tick" x="${pad.left - 10}" y="${y(tick) + 4}" text-anchor="end">${escapeHTML(percent(tick))}</text>`)
+    ].join("");
+    const curve = points.map((point) => `${x(point.risk).toFixed(1)},${y(point.ret).toFixed(1)}`).join(" ");
+    const area = `M${x(points[0].risk).toFixed(1)},${(height - pad.bottom).toFixed(1)} L${curve.replace(/ /g, " L")} L${x(points[points.length - 1].risk).toFixed(1)},${(height - pad.bottom).toFixed(1)} Z`;
+    const assetDots = references.map((asset) => `
+        <g class="frontier-asset">
+            <circle cx="${x(asset.risk)}" cy="${y(asset.ret)}" r="6"></circle>
+            <text x="${x(asset.risk) + 10}" y="${y(asset.ret) - 8}">${escapeHTML(asset.name)}</text>
+        </g>`).join("");
+    const optimumMarker = optimum ? `
+        <g class="frontier-optimum">
+            <rect x="${x(optimum.risk) - 7}" y="${y(optimum.ret) - 7}" width="14" height="14" transform="rotate(45 ${x(optimum.risk)} ${y(optimum.ret)})"></rect>
+            <text x="${x(optimum.risk) - 12}" y="${y(optimum.ret) - 14}" text-anchor="end">Tu óptimo</text>
+        </g>` : "";
+
+    const chart = document.getElementById("frontier-chart");
+    chart.innerHTML = `
+        <div class="frontier-layout">
+            <div class="frontier-plot">
+                <svg class="frontier-svg" viewBox="0 0 ${width} ${height}" role="img"
+                    aria-label="Frontera eficiente: riesgo anual frente a rendimiento esperado anual de ${points.length} carteras">
+                    <defs>
+                        <linearGradient id="frontier-fill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="currentColor" stop-opacity="0.18"></stop>
+                            <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
+                        </linearGradient>
+                    </defs>
+                    ${grid}
+                    <line class="chart-axis" x1="${pad.left}" y1="${height - pad.bottom}" x2="${width - pad.right}" y2="${height - pad.bottom}"></line>
+                    <line class="chart-axis" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${height - pad.bottom}"></line>
+                    <path class="frontier-area" d="${area}"></path>
+                    <polyline class="frontier-line" points="${curve}"></polyline>
+                    ${points.map((point) => `<circle class="frontier-point" cx="${x(point.risk)}" cy="${y(point.ret)}" r="3.5"></circle>`).join("")}
+                    ${assetDots}
+                    <g class="frontier-cursor">
+                        <line data-cursor-line y1="${pad.top}" y2="${height - pad.bottom}"></line>
+                        <circle data-cursor-dot r="9"></circle>
+                    </g>
+                    ${optimumMarker}
+                    <text class="chart-label" x="${(pad.left + width - pad.right) / 2}" y="${height - 14}" text-anchor="middle">Riesgo anual (volatilidad)</text>
+                    <text class="chart-label" transform="translate(18 ${(pad.top + height - pad.bottom) / 2}) rotate(-90)" text-anchor="middle">Rendimiento esperado anual</text>
+                    <rect class="frontier-hit" x="${pad.left}" y="${pad.top}" width="${width - pad.left - pad.right}" height="${height - pad.top - pad.bottom}"></rect>
+                </svg>
+                <div class="frontier-legend" aria-hidden="true">
+                    <span><i class="legend-line"></i> Carteras eficientes</span>
+                    ${references.length ? '<span><i class="legend-asset"></i> Cada activo por separado</span>' : ""}
+                    ${optimum ? '<span><i class="legend-optimum"></i> Tu cartera óptima</span>' : ""}
+                </div>
+                <label class="frontier-slider">
+                    <span>Menos riesgo</span>
+                    <input type="range" min="0" max="${points.length - 1}" step="1" data-frontier-slider
+                        aria-label="Elige el nivel de riesgo de la cartera">
+                    <span>Más riesgo</span>
+                </label>
+            </div>
+            <aside class="frontier-detail" aria-live="polite" data-frontier-detail></aside>
+        </div>`;
+
+    const svg = chart.querySelector("svg");
+    const slider = chart.querySelector("[data-frontier-slider]");
+    const detail = chart.querySelector("[data-frontier-detail]");
+    const cursorLine = chart.querySelector("[data-cursor-line]");
+    const cursorDot = chart.querySelector("[data-cursor-dot]");
+
+    const describe = (index) => {
+        const point = points[index];
+        const allocation = point.weights
+            .map((weight, assetIndex) => ({ name: names[assetIndex] || `Activo ${assetIndex + 1}`, weight }))
+            .filter((entry) => entry.weight >= 0.005)
+            .sort((first, second) => second.weight - first.weight);
+        let comparison = "";
+        if (optimum) {
+            const deltaReturn = (point.ret - optimum.ret) * 100;
+            const deltaRisk = (point.risk - optimum.risk) * 100;
+            const signed = (value) => `${value >= 0 ? "+" : "−"}${formatMetric(Math.abs(value), 1)}`;
+            comparison = Math.abs(deltaReturn) < 0.05 && Math.abs(deltaRisk) < 0.05
+                ? '<p class="frontier-compare">Muy cerca de tu cartera óptima: casi el mismo riesgo y rendimiento.</p>'
+                : `<p class="frontier-compare">Frente a tu óptimo: <strong>${signed(deltaReturn)} pts</strong> de rendimiento y <strong>${signed(deltaRisk)} pts</strong> de riesgo.</p>`;
+        }
+        detail.innerHTML = `
+            <p class="frontier-detail-title">Cartera ${index + 1} de ${points.length}</p>
+            <div class="frontier-detail-kpis">
+                <div><span>Rendimiento anual</span><strong>${percent(point.ret)}</strong></div>
+                <div><span>Riesgo anual</span><strong>${percent(point.risk)}</strong></div>
+            </div>
+            ${comparison}
+            <ul class="frontier-weights">
+                ${allocation.map((entry) => `
+                    <li>
+                        <span class="frontier-weight-name">${escapeHTML(entry.name)}</span>
+                        <span class="allocation-bar is-weight" aria-hidden="true"><span style="width:${(entry.weight * 100).toFixed(2)}%"></span></span>
+                        <strong>${formatPercent(entry.weight, 1)}</strong>
+                    </li>`).join("")}
+            </ul>`;
+    };
+
+    const select = (index) => {
+        const point = points[index];
+        cursorLine.setAttribute("x1", x(point.risk));
+        cursorLine.setAttribute("x2", x(point.risk));
+        cursorDot.setAttribute("cx", x(point.risk));
+        cursorDot.setAttribute("cy", y(point.ret));
+        slider.value = String(index);
+        slider.setAttribute("aria-valuetext",
+            `Riesgo ${percent(point.risk)}, rendimiento ${percent(point.ret)}`);
+        describe(index);
+    };
+
+    const nearestByRisk = (risk) => points.reduce((best, point, index) =>
+        (Math.abs(point.risk - risk) < Math.abs(points[best].risk - risk) ? index : best), 0);
+
+    const fromPointer = (event) => {
+        const box = svg.getBoundingClientRect();
+        const svgX = ((event.clientX - box.left) / box.width) * width;
+        const risk = ((svgX - pad.left) / (width - pad.left - pad.right)) * riskMax;
+        select(nearestByRisk(risk));
+    };
+    svg.addEventListener("pointermove", fromPointer);
+    svg.addEventListener("pointerdown", fromPointer);
+    slider.addEventListener("input", () => select(Number(slider.value)));
+
+    select(optimum ? nearestByRisk(optimum.risk) : Math.floor(points.length / 2));
     document.getElementById("frontier-section").hidden = false;
 }
 

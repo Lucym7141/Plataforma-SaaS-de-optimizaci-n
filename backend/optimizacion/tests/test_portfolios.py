@@ -147,6 +147,41 @@ class PortfolioOptimizationTests(TestCase):
         frontier_result = self.job_result(frontier_response)
         self.assertEqual(frontier_result["activos"], self.payload["activos"])
         self.assertEqual(len(frontier_result["puntos"]), 21)
+        # Datos para el gráfico interactivo: activos de referencia y la
+        # última cartera óptima, que coincide con los supuestos actuales.
+        references = frontier_result["referencias_activos"]
+        self.assertEqual(
+            [item["nombre"] for item in references],
+            self.payload["activos"],
+        )
+        for index, item in enumerate(references):
+            self.assertAlmostEqual(
+                item["volatilidad"] ** 2,
+                float(self.payload["covarianza"][index][index]),
+                places=8,
+            )
+        optimum = frontier_result["cartera_optima"]
+        self.assertIsNotNone(optimum)
+        self.assertAlmostEqual(
+            optimum["volatilidad_portafolio"],
+            float(result["volatilidad_portafolio"]),
+            places=8,
+        )
+        self.assertEqual(
+            frontier_result["periodos_por_anio"],
+            result["modelo_snapshot"]["periodos_por_anio"],
+        )
+
+        # Si cambian los supuestos, la cartera anterior deja de marcarse.
+        changed = dict(self.payload, rendimientos_esperados=["0.12", "0.25"])
+        self.assertEqual(
+            self.client.put(portfolio_url, changed, format="json").status_code,
+            200,
+        )
+        changed_frontier = self.job_result(
+            self.client.post(f"{portfolio_url}frontera/")
+        )
+        self.assertIsNone(changed_frontier["cartera_optima"])
 
     def test_media_varianza_respeta_restricciones_y_optimo(self):
         resultado = optimizar_media_varianza(

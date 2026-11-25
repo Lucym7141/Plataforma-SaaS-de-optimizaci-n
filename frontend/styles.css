@@ -5927,3 +5927,225 @@ body.dark .history-status.is-bad {
 #demo-data-message {
     margin: 0 0 16px;
 }
+
+/* Frontera eficiente interactiva */
+.frontier-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 20px;
+    align-items: start;
+    margin-top: 12px;
+}
+
+.frontier-plot {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+    color: var(--primary);
+}
+
+.frontier-plot .frontier-svg {
+    max-width: none;
+    margin: 0;
+    touch-action: none;
+}
+
+.frontier-grid {
+    stroke: var(--border);
+    stroke-width: 1;
+}
+
+.frontier-area {
+    fill: url(#frontier-fill);
+}
+
+.frontier-point {
+    fill: var(--primary);
+    opacity: 0.55;
+}
+
+.frontier-asset circle {
+    fill: var(--surface);
+    stroke: #f59e0b;
+    stroke-width: 3;
+}
+
+.frontier-asset text,
+.frontier-optimum text {
+    fill: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.frontier-optimum rect {
+    fill: var(--text);
+    stroke: var(--surface);
+    stroke-width: 2;
+}
+
+.frontier-cursor line {
+    stroke: var(--primary);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 4;
+}
+
+.frontier-cursor circle {
+    fill: var(--primary);
+    stroke: var(--surface);
+    stroke-width: 3;
+    filter: drop-shadow(0 2px 6px rgba(15, 23, 42, 0.25));
+}
+
+.frontier-hit {
+    fill: transparent;
+    cursor: crosshair;
+}
+
+.frontier-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.frontier-legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.frontier-legend i {
+    display: inline-block;
+}
+
+.legend-line {
+    width: 18px;
+    height: 3px;
+    border-radius: 2px;
+    background: var(--primary);
+}
+
+.legend-asset {
+    width: 10px;
+    height: 10px;
+    border: 3px solid #f59e0b;
+    border-radius: 50%;
+}
+
+.legend-optimum {
+    width: 10px;
+    height: 10px;
+    background: var(--text);
+    transform: rotate(45deg);
+}
+
+.frontier-slider {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.frontier-slider input {
+    width: 100%;
+    accent-color: var(--primary);
+}
+
+.frontier-detail {
+    display: grid;
+    gap: 12px;
+    padding: 16px 18px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+
+.frontier-detail-title {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.frontier-detail-kpis {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.frontier-detail-kpis div {
+    display: grid;
+    gap: 2px;
+}
+
+.frontier-detail-kpis span {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.frontier-detail-kpis strong {
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+}
+
+.frontier-compare {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--surface-soft);
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.frontier-weights {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.frontier-weights li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 70px 52px;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+}
+
+.frontier-weight-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.frontier-weights strong {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 900px) {
+    .frontier-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    /* El gráfico se encoge: sus textos crecen para seguir legibles. */
+    .frontier-svg .chart-tick,
+    .frontier-asset text,
+    .frontier-optimum text {
+        font-size: 22px;
+    }
+
+    .frontier-svg .chart-label {
+        font-size: 22px;
+    }
+}

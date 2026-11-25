@@ -384,6 +384,19 @@ test("CSV import can be reviewed, optimized, and plotted", async ({ page }) => {
     await card.getByRole("button", { name: "Frontera eficiente" }).click();
     await expect(page.locator("#frontier-section")).toBeVisible();
     await expect(page.locator("#frontier-chart svg polyline")).toBeVisible();
+    // Frontera interactiva: activos de referencia, la cartera óptima ya
+    // calculada y el detalle de la cartera elegida con el control deslizante.
+    await expect(page.locator("#frontier-chart .frontier-asset")).toHaveCount(2);
+    await expect(page.locator("#frontier-chart .frontier-optimum")).toBeVisible();
+    const frontierDetail = page.locator("[data-frontier-detail]");
+    await expect(frontierDetail).toContainText("Rendimiento anual");
+    const frontierSlider = page.locator("[data-frontier-slider]");
+    await frontierSlider.focus();
+    await page.keyboard.press("End");
+    await expect(frontierDetail).toContainText("Cartera 21 de 21");
+    await expect(frontierDetail).toContainText("Frente a tu óptimo");
+    await page.keyboard.press("Home");
+    await expect(frontierDetail).toContainText("Cartera 1 de 21");
 });
 
 test("dashboard shows active activity and does not refresh when archived lists change", async ({ page }) => {
